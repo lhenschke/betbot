@@ -86,6 +86,8 @@ class Config(BaseModel):
     books: dict[str, BookConfig] = Field(default_factory=lambda: {
         "OZ": BookConfig(base_url="https://www.ozoon.eu"),
     })
+    auto_update: bool = True          # pull new versions from GitHub and restart when idle
+    update_check_minutes: float = 10.0
     data_dir: str = "data"
     profile_dir: str = "profiles"
     dashboard_host: str = "127.0.0.1"

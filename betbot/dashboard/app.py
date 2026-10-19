@@ -12,12 +12,13 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..engine import Engine
-from ..matching.teams import ALIAS_DIR, reload_aliases
+from ..matching import teams
+from ..updater import Updater
 
 STATIC = Path(__file__).parent / "static"
 
 
-def create_app(engine: Engine) -> FastAPI:
+def create_app(engine: Engine, updater: "Updater | None" = None) -> FastAPI:
     app = FastAPI(title="betbot")
 
     @app.get("/")
@@ -26,7 +27,23 @@ def create_app(engine: Engine) -> FastAPI:
 
     @app.get("/api/state")
     async def state() -> JSONResponse:
-        return JSONResponse(engine.state())
+        st = engine.state()
+        if updater:
+            u = updater.status
+            st["update"] = {"enabled": u.enabled, "reason": u.reason, "behind": u.behind, "latest": u.latest,
+                            "restarting": u.restart_requested, "auto": engine.cfg.auto_update}
+        return JSONResponse(st)
+
+    @app.post("/api/update")
+    async def update() -> JSONResponse:
+        """Check GitHub now; if there's a new version, restart into it once no bet is in progress."""
+        if not updater or not updater.status.enabled:
+            return JSONResponse({"ok": False, "reason": updater.status.reason if updater else "no updater"})
+        await asyncio.to_thread(updater.check)
+        if updater.status.behind and not updater.status.restart_requested:
+            asyncio.ensure_future(updater.restart_when_safe())
+            return JSONResponse({"ok": True, "reason": f"updating to: {updater.status.latest}"})
+        return JSONResponse({"ok": True, "reason": "already up to date"})
 
     @app.post("/api/place")
     async def place(body: dict[str, Any]) -> JSONResponse:
@@ -88,14 +105,15 @@ def create_app(engine: Engine) -> FastAPI:
     async def alias(body: dict[str, Any]) -> JSONResponse:
         """Teach the matcher that `variant` is the same team as `canonical` in `league`."""
         league, canonical, variant = body["league"].upper(), body["canonical"].strip(), body["variant"].strip()
-        p = ALIAS_DIR / f"{league}.yaml"
+        teams.LOCAL_ALIAS_DIR.mkdir(parents=True, exist_ok=True)
+        p = teams.LOCAL_ALIAS_DIR / f"{league}.yaml"
         data = yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
         data = data or {}
         data.setdefault(canonical, [])
         if variant not in data[canonical]:
             data[canonical].append(variant)
         p.write_text(yaml.safe_dump(data, sort_keys=True, allow_unicode=True), encoding="utf-8")
-        reload_aliases()
+        teams.reload_aliases()
         for v in engine.views.values():
             if v.row.league.upper() == league and v.state == "unmatched":
                 v.state = "new"

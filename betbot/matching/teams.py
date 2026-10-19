@@ -15,6 +15,8 @@ import yaml
 from rapidfuzz import fuzz
 
 ALIAS_DIR = Path(__file__).parent / "aliases"
+# Aliases added from the dashboard live outside the code folder so updates never clash with them.
+LOCAL_ALIAS_DIR = Path("data") / "aliases"
 
 # Extra words that make two names different teams ("Michigan" vs "Michigan State").
 DISTINGUISHING = {
@@ -67,10 +69,13 @@ class Aliases:
 
 @lru_cache(maxsize=64)
 def _load(league: str) -> Aliases:
-    p = ALIAS_DIR / f"{league}.yaml"
-    if not p.exists():
-        return Aliases()
-    return Aliases(yaml.safe_load(p.read_text(encoding="utf-8")) or {})
+    merged: dict[str, list[str]] = {}
+    for d in (ALIAS_DIR, LOCAL_ALIAS_DIR):
+        p = d / f"{league}.yaml"
+        if p.exists():
+            for canon, variants in (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).items():
+                merged.setdefault(canon, []).extend(variants or [])
+    return Aliases(merged)
 
 
 def reload_aliases() -> None:

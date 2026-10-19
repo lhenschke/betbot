@@ -58,23 +58,42 @@ async def build_adapters(cfg: Config, ledger: Ledger, with_browser: bool) -> dic
     return adapters
 
 
-async def cmd_run(cfg: Config, config_path: Path, with_browser: bool) -> None:
+def _quiet_windows_resets(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+    """Windows logs a traceback whenever a browser drops a connection; that's harmless."""
+    if isinstance(context.get("exception"), ConnectionResetError):
+        return
+    loop.default_exception_handler(context)
+
+
+async def cmd_run(cfg: Config, config_path: Path, with_browser: bool) -> int:
     import uvicorn
 
     from .dashboard.app import create_app
+    from .matching import teams
+    from .updater import RESTART_CODE, Updater
 
+    asyncio.get_running_loop().set_exception_handler(_quiet_windows_resets)
     human.configure(tuple(cfg.human.typing_delay_ms))
+    teams.LOCAL_ALIAS_DIR = Path(cfg.data_dir) / "aliases"
     ledger = Ledger(Path(cfg.data_dir) / "betbot.sqlite3")
     adapters = await build_adapters(cfg, ledger, with_browser)
     poller = FeedPoller(cfg.feeds, cfg.feed_interval_s, cfg.feed_date_tz)
     engine = Engine(cfg, ledger, poller, adapters, save_config=lambda: cfg.save(config_path))
-    tasks = [asyncio.create_task(poller.run(engine.on_feed))]
+    exit_code = 0
+
+    def request_restart() -> None:
+        nonlocal exit_code
+        exit_code = RESTART_CODE
+        server.should_exit = True
+
+    updater = Updater(engine, request_restart)
+    tasks = [asyncio.create_task(poller.run(engine.on_feed)), asyncio.create_task(updater.run())]
     for code in adapters:
         if with_browser:
             await engine.ensure_login(code)
             tasks.append(asyncio.create_task(engine.session_watch(code)))
             tasks.append(asyncio.create_task(engine.idle_loop(code)))
-    server = uvicorn.Server(uvicorn.Config(create_app(engine), host=cfg.dashboard_host,
+    server = uvicorn.Server(uvicorn.Config(create_app(engine, updater), host=cfg.dashboard_host,
                                            port=cfg.dashboard_port, log_level="warning"))
     log.info("dashboard: http://%s:%s  (dry_run=%s)", cfg.dashboard_host, cfg.dashboard_port, cfg.dry_run)
     try:
@@ -85,6 +104,7 @@ async def cmd_run(cfg: Config, config_path: Path, with_browser: bool) -> None:
         for a in adapters.values():
             if a.browser:
                 await a.browser.stop()
+    return exit_code
 
 
 async def cmd_check(cfg: Config) -> None:
@@ -154,7 +174,7 @@ def main() -> None:
     elif args.cmd == "capture":
         asyncio.run(cmd_capture(cfg, args.book, args.minutes))
     else:
-        asyncio.run(cmd_run(cfg, config_path, with_browser=not getattr(args, "no_browser", False)))
+        sys.exit(asyncio.run(cmd_run(cfg, config_path, with_browser=not getattr(args, "no_browser", False))))
 
 
 async def cmd_capture(cfg: Config, book: str, minutes: float) -> None:

@@ -47,8 +47,12 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
 
 ## Setup on each Windows PC
 
-1. Install **Python 3.12 or newer** (python.org, tick "Add to PATH"; the Microsoft Store version also works) and **Google Chrome**.
-2. Copy or clone this folder to the PC.
+1. Install **Python 3.12 or newer** (python.org, tick "Add to PATH"; the Microsoft Store version also works), **Google Chrome**, and **Git for Windows** (<https://git-scm.com/download/win>, default options).
+2. Get the code with Git, not a ZIP, so it can update itself. In a Command Prompt, in the folder you want it in:
+   ```
+   git clone -b claude/magical-keller-l3f7qy https://github.com/lhenschke/betbot.git
+   ```
+   For a private repo, a GitHub sign-in window appears the first time; sign in once and Windows remembers it.
 3. Double-click **`run.bat`**. The first time, it installs everything, creates `config.yaml` and opens it.
    - Set `books.OZ.account` to a label for this PC's account, e.g. `lee-desktop`.
 4. Double-click **`set-credentials.bat`** and enter the OZ email and password. They are stored in **Windows Credential Manager**, never in a file.
@@ -57,7 +61,17 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
    - The bot logs in by itself. If a captcha, 2FA code or device check appears, it pauses betting and alerts you: finish the login in the Chrome window and it carries on.
 6. Leave Chrome open; minimizing it is fine. The bot doesn't use the PC's mouse or keyboard except inside that Chrome window, and only in `ui` mode.
 
-Each PC keeps its own `config.yaml`, `data/` (ledger and logs) and `profiles/` (Chrome profile), so several PCs with different accounts run independently.
+Each PC keeps its own `config.yaml`, `data/` (ledger, logs, aliases added from the dashboard) and `profiles/` (Chrome profile), so several PCs with different accounts run independently. None of these are in Git, so updates never touch them.
+
+### Updates
+
+With a Git copy, every PC updates itself:
+
+- **On start,** `run.bat` pulls the latest version and installs any new packages.
+- **While running,** the bot checks GitHub every `update_check_minutes` (default 10). When there's a new version, it waits until no bet is in progress and none was placed in the last minute, then restarts into it. Chrome stays logged in across restarts.
+- **On the dashboard,** the header shows "up to date" or an **Update now** button. Set `auto_update: false` to only update when you press it or restart.
+
+So publishing a change is just pushing it to the branch the PCs track.
 
 ### First real bets (please do these in order)
 

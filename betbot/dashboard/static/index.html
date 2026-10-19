@@ -51,6 +51,7 @@
   <label>Queue ≥ <input type="number" id="borderline_min" step="1"></label>
   <button class="danger" id="kill">Stop auto</button>
   <span id="feeds" class="muted"></span>
+  <span id="update"></span>
 </header>
 <main>
   <section>
@@ -111,6 +112,12 @@ function render() {
   }).join(" ");
   const bad = state.feeds.filter(f => !f.ok);
   $("feeds").textContent = `${state.feeds.length} feeds` + (bad.length ? ` · ${bad.length} failing` : "");
+  const u = state.update;
+  $("update").innerHTML = !u ? "" : !u.enabled ? `<span class="pill" title="${esc(u.reason)}">updates off</span>` :
+    u.restarting ? `<span class="pill warn">updating…</span>` :
+    u.behind ? `<button class="primary" onclick="updateNow()">Update now: ${esc(u.latest)}</button>` :
+    `<span class="pill good" title="${esc(u.reason || "checks GitHub every few minutes")}">up to date</span>` +
+    ` <button onclick="updateNow()">Check for update</button>`;
   const queued = state.rows.filter(r => r.state === "queued");
   $("qcount").textContent = queued.length ? `(${queued.length})` : "";
   $("queue").innerHTML = queued.length ? queued.map(r => `
@@ -133,6 +140,7 @@ function render() {
     <td>${esc(b.trigger)}/${esc(b.mode)}${b.dry_run ? " (dry)" : ""}</td><td>${esc(b.status)} ${esc(b.reference || b.reason || "")}</td>
     <td class="num">${t.final_ms ? (t.final_ms / 1000).toFixed(1) + "s" : t.post_ms ? (t.post_ms / 1000).toFixed(1) + "s" : ""}</td></tr>`; }).join("");
 }
+async function updateNow() { const r = await post("/api/update"); notify(r.reason || "checking…"); load(); }
 async function load() { state = await (await fetch("/api/state")).json(); render(); }
 async function place(id, mode) {
   const r = await post("/api/place", {row_id: id, mode});
