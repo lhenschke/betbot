@@ -51,7 +51,7 @@ async def build_adapters(cfg: Config, ledger: Ledger, with_browser: bool) -> dic
             session = BrowserSession(bc.base_url, Path(cfg.profile_dir) / f"{code}-{bc.account or 'default'}",
                                      channel=cfg.browser_channel, headless=cfg.headless,
                                      login_selectors=bc.login_selectors, executable_path=cfg.browser_path,
-                                     start_path=bc.start_path)
+                                     start_path=bc.start_path, stealth=cfg.stealth)
             await session.start()
             adapters[code] = cls(code, bc, BrowserTransport(session), ledger, session)
         else:
@@ -192,7 +192,7 @@ async def cmd_capture(cfg: Config, book: str, minutes: float) -> None:
         raise SystemExit(f"unknown book {book}; known: {', '.join(KNOWN_BOOKS)}")
     session = BrowserSession(base_url, Path(cfg.profile_dir) / f"{book}-{account}",
                              channel=cfg.browser_channel, headless=False, executable_path=cfg.browser_path,
-                             start_path=start_path)
+                             start_path=start_path, stealth=cfg.stealth)
     await session.start()
     out = Path(cfg.data_dir) / f"capture-{book}.json"
     try:

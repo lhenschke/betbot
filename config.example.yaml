@@ -71,3 +71,4 @@ dashboard_port: 8765
 browser_channel: chrome    # use the installed Google Chrome
 browser_path: ""
 headless: false
+stealth: true              # patchright hides the automation from the site; false = plain Playwright

@@ -104,6 +104,7 @@ class Config(BaseModel):
     browser_channel: str = "chrome"  # use the installed Chrome; "" for Playwright's Chromium
     browser_path: str = ""           # explicit browser executable; overrides browser_channel
     headless: bool = False
+    stealth: bool = True             # drive Chrome with patchright (undetected Playwright); false = plain Playwright
 
     @classmethod
     def load(cls, path: str | Path) -> "Config":

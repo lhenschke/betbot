@@ -9,6 +9,8 @@ It starts with **Ozoon (`OZ`)**. Books are modules that can be switched on and o
 
 Each PC runs its own copy with its own book account. The bot works through a **real Chrome window that you are logged into**. It logs back in by itself when needed, and behaves like a person: curved mouse movements, uneven typing, pauses, idle browsing and bet pacing.
 
+Chrome is driven by [patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python), a patched Playwright that hides the usual automation giveaways (`navigator.webdriver`, the DevTools `Runtime.enable` leak, automation command-line flags). Set `stealth: false` in `config.yaml` to fall back to plain Playwright.
+
 > Start in **dry run** (the default). The bot then does everything except submit the bet, so you can watch what it would do.
 
 ## How it works

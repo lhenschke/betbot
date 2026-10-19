@@ -6,6 +6,12 @@ Two tabs share one Chrome profile (cookies, login):
   api_page  a background tab on the same site that runs the site's own API calls with
             fetch(), so they carry the real cookies, origin and TLS fingerprint and
             never get cut off by the visible tab navigating.
+
+With stealth on (the default) Chrome is driven by patchright, a patched Playwright that hides
+the automation leaks (Runtime.enable, injected globals, command-line flags) sites look for.
+patchright runs page scripts in an isolated world unless told otherwise, so everything here
+that touches the site's own JavaScript goes through BrowserSession._eval, which picks the
+page's main world.
 """
 
 from __future__ import annotations
@@ -96,13 +102,14 @@ CAPTURE_CLICK_JS = """
 class BrowserSession:
     def __init__(self, base_url: str, profile_dir: str | Path, channel: str = "chrome",
                  headless: bool = False, login_selectors: dict[str, str] | None = None,
-                 executable_path: str | None = None, start_path: str = "/sports"):
+                 executable_path: str | None = None, start_path: str = "/sports", stealth: bool = True):
         self.base_url = base_url.rstrip("/")
         self.profile_dir = Path(profile_dir)
         self.channel = channel
         self.executable_path = executable_path or None
         self.start_path = start_path
         self.headless = headless
+        self.stealth = stealth
         self.login_selectors = {**DEFAULT_LOGIN_SELECTORS, **(login_selectors or {})}
         self._pw: Any = None
         self.context: Any = None
@@ -112,7 +119,10 @@ class BrowserSession:
         self.lock = asyncio.Lock()  # one bet / one login at a time per browser
 
     async def start(self) -> None:
-        from playwright.async_api import async_playwright
+        if self.stealth:
+            from patchright.async_api import async_playwright
+        else:
+            from playwright.async_api import async_playwright
 
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self._pw = await async_playwright().start()
@@ -140,6 +150,12 @@ class BrowserSession:
         if self._pw:
             await self._pw.stop()
 
+    async def _eval(self, page: Any, js: str, arg: Any = None) -> Any:
+        """Run js in the page's main world, where the site's globals (window.OL, its fetch) live."""
+        if self.stealth:
+            return await page.evaluate(js, arg, isolated_context=False)
+        return await page.evaluate(js, arg)
+
     # ----- the site's API, from inside the page -----------------------------
     async def request(self, method: str, path: str, *, body: Any = None,
                       headers: dict[str, str] | None = None) -> tuple[int, Any]:
@@ -147,16 +163,16 @@ class BrowserSession:
         # from the same origin as the page (e.g. services.ozoon.eu), not necessarily base_url.
         url = path
         try:
-            status, data = await self.api_page.evaluate(FETCH_JS, [method, url, body, headers or {}])
+            status, data = await self._eval(self.api_page, FETCH_JS, [method, url, body, headers or {}])
         except Exception as e:  # tab reloaded mid-call, etc.
             log.warning("in-page fetch failed (%s); reloading api tab", e)
             await self.api_page.goto(self.base_url + "/sports", wait_until="domcontentloaded")
-            status, data = await self.api_page.evaluate(FETCH_JS, [method, url, body, headers or {}])
+            status, data = await self._eval(self.api_page, FETCH_JS, [method, url, body, headers or {}])
         return int(status), data
 
     async def auth(self) -> dict[str, Any]:
         for _ in range(20):  # the site's Auth API loads shortly after the page
-            st = await self.api_page.evaluate(AUTH_JS)
+            st = await self._eval(self.api_page, AUTH_JS)
             if st.get("ready"):
                 return st
             await asyncio.sleep(0.25)
@@ -170,7 +186,7 @@ class BrowserSession:
         return st.get("sid") if st.get("auth") else None
 
     async def balance(self) -> float | None:
-        data = await self.api_page.evaluate(BALANCE_JS)
+        data = await self._eval(self.api_page, BALANCE_JS)
         if not isinstance(data, list):
             return None
         for kind in ("Available", "AvailableBalance", "Cash", "Real"):
@@ -263,7 +279,7 @@ class BrowserSession:
 
     async def _logged_in_after_submit(self, reload_api: bool) -> bool:
         try:
-            st = await self.page.evaluate(AUTH_JS)
+            st = await self._eval(self.page, AUTH_JS)
         except Exception:  # the page is navigating after submit
             st = {}
         if st.get("auth") or reload_api:
@@ -333,7 +349,7 @@ class BrowserSession:
 
         await self.context.expose_binding("betbotClick", on_click)
         await self.context.add_init_script(f"({CAPTURE_CLICK_JS})()")
-        await self.page.evaluate(CAPTURE_CLICK_JS)
+        await self._eval(self.page, CAPTURE_CLICK_JS)
         self.context.on("response", lambda r: asyncio.ensure_future(on_response(r)))
         for pg in self.context.pages:
             pg.on("websocket", on_websocket)
