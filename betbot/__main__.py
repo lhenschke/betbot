@@ -50,7 +50,8 @@ async def build_adapters(cfg: Config, ledger: Ledger, with_browser: bool) -> dic
         if with_browser:
             session = BrowserSession(bc.base_url, Path(cfg.profile_dir) / f"{code}-{bc.account or 'default'}",
                                      channel=cfg.browser_channel, headless=cfg.headless,
-                                     login_selectors=bc.login_selectors, executable_path=cfg.browser_path)
+                                     login_selectors=bc.login_selectors, executable_path=cfg.browser_path,
+                                     start_path=bc.start_path)
             await session.start()
             adapters[code] = cls(code, bc, BrowserTransport(session), ledger, session)
         else:
@@ -167,8 +168,8 @@ def main() -> None:
     setup_logging(Path(cfg.data_dir), args.verbose)
 
     if args.cmd == "set-credentials":
-        bc = cfg.books[args.book]
-        prompt_and_store(args.book, bc.account or "default")
+        bc = cfg.books.get(args.book)
+        prompt_and_store(args.book, (bc.account if bc else "") or "default")
     elif args.cmd == "check":
         asyncio.run(cmd_check(cfg))
     elif args.cmd == "capture":
@@ -180,9 +181,18 @@ def main() -> None:
 async def cmd_capture(cfg: Config, book: str, minutes: float) -> None:
     from .browser import BrowserSession
 
-    bc = cfg.books[book]
-    session = BrowserSession(bc.base_url, Path(cfg.profile_dir) / f"{book}-{bc.account or 'default'}",
-                             channel=cfg.browser_channel, headless=False, executable_path=cfg.browser_path)
+    from .config import KNOWN_BOOKS
+
+    bc = cfg.books.get(book)
+    if bc:
+        base_url, start_path, account = bc.base_url, bc.start_path, bc.account or "default"
+    elif book in KNOWN_BOOKS:
+        (base_url, start_path), account = KNOWN_BOOKS[book], "default"
+    else:
+        raise SystemExit(f"unknown book {book}; known: {', '.join(KNOWN_BOOKS)}")
+    session = BrowserSession(base_url, Path(cfg.profile_dir) / f"{book}-{account}",
+                             channel=cfg.browser_channel, headless=False, executable_path=cfg.browser_path,
+                             start_path=start_path)
     await session.start()
     out = Path(cfg.data_dir) / f"capture-{book}.json"
     try:

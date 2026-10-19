@@ -96,11 +96,12 @@ CAPTURE_CLICK_JS = """
 class BrowserSession:
     def __init__(self, base_url: str, profile_dir: str | Path, channel: str = "chrome",
                  headless: bool = False, login_selectors: dict[str, str] | None = None,
-                 executable_path: str | None = None):
+                 executable_path: str | None = None, start_path: str = "/sports"):
         self.base_url = base_url.rstrip("/")
         self.profile_dir = Path(profile_dir)
         self.channel = channel
         self.executable_path = executable_path or None
+        self.start_path = start_path
         self.headless = headless
         self.login_selectors = {**DEFAULT_LOGIN_SELECTORS, **(login_selectors or {})}
         self._pw: Any = None
@@ -126,9 +127,9 @@ class BrowserSession:
         )
         pages = self.context.pages
         self.page = pages[0] if pages else await self.context.new_page()
-        await self.page.goto(self.base_url + "/sports", wait_until="domcontentloaded")
+        await self.page.goto(self.base_url + self.start_path, wait_until="domcontentloaded")
         self.api_page = await self.context.new_page()
-        await self.api_page.goto(self.base_url + "/sports", wait_until="domcontentloaded")
+        await self.api_page.goto(self.base_url + self.start_path, wait_until="domcontentloaded")
         await self.page.bring_to_front()
         await human.pause(1.0, 2.0)
         await self.accept_cookies()
@@ -273,34 +274,132 @@ class BrowserSession:
 
     # ----- capture mode ------------------------------------------------------
     async def capture(self, out_path: Path, seconds: float = 600.0) -> None:
-        """Record bet-slip requests/responses and clicked elements while a person bets by hand."""
+        """Record what the site does while a person browses and bets by hand.
+
+        Saves every data request (XHR/fetch/page loads) with its response, websocket traffic and
+        clicked elements to out_path, plus a short, shareable summary next to it. Cookies, auth
+        headers and anything that looks like a password or token are blanked out.
+        """
         records: list[dict[str, Any]] = []
+        summary_path = out_path.with_name(out_path.stem + "-summary.txt")
+        seen: dict[str, int] = {}
+
+        def save() -> None:
+            out_path.write_text(json.dumps(records, indent=2, default=str), encoding="utf-8")
+            summary_path.write_text(_capture_summary(records), encoding="utf-8")
 
         async def on_response(resp: Any) -> None:
             req = resp.request
-            if "/services/sports/bet/" not in req.url:
+            if req.resource_type not in ("xhr", "fetch", "document", "eventsource"):
+                return
+            if _STATIC.search(req.url.split("?")[0]):
                 return
             try:
-                body = await resp.json()
+                text = await resp.text()
             except Exception:
-                body = None
-            hdrs = {k: ("<redacted>" if k.lower() in ("cookie", "authorization", "x-session-id") else v)
-                    for k, v in (await req.all_headers()).items()}
-            records.append({"ts": time.time(), "method": req.method, "url": req.url, "headers": hdrs,
-                            "request": req.post_data, "status": resp.status, "response": body})
-            out_path.write_text(json.dumps(records, indent=2))
-            print(f"captured {req.method} {req.url} -> {resp.status}")
+                text = ""
+            try:
+                body: Any = json.loads(text)
+            except ValueError:
+                body = text[:5000]
+            key = f"{req.method} {req.url.split('?')[0]}"
+            seen[key] = seen.get(key, 0) + 1
+            if seen[key] > 20:  # polling endpoints: the first few calls are enough
+                return
+            records.append({"ts": time.time(), "type": req.resource_type, "method": req.method, "url": req.url,
+                            "headers": _redact_headers(await req.all_headers()),
+                            "request": _redact_body(req.post_data), "status": resp.status, "response": body})
+            save()
+            print(f"captured {req.method} {req.url[:110]} -> {resp.status}")
+
+        def on_websocket(ws: Any) -> None:
+            frames = {"n": 0}
+            records.append({"ts": time.time(), "websocket": ws.url})
+
+            def frame(direction: str, payload: Any) -> None:
+                frames["n"] += 1
+                if frames["n"] <= 60:
+                    records.append({"ts": time.time(), "ws": ws.url, "dir": direction,
+                                    "data": _redact_body(payload if isinstance(payload, str) else repr(payload))[:3000]})
+                    save()
+
+            ws.on("framesent", lambda p: frame("sent", p))
+            ws.on("framereceived", lambda p: frame("received", p))
+            print(f"websocket {ws.url[:110]}")
 
         async def on_click(_source: Any, path_json: str) -> None:
             records.append({"ts": time.time(), "click": json.loads(path_json)})
-            out_path.write_text(json.dumps(records, indent=2))
+            save()
 
         await self.context.expose_binding("betbotClick", on_click)
         await self.context.add_init_script(f"({CAPTURE_CLICK_JS})()")
         await self.page.evaluate(CAPTURE_CLICK_JS)
         self.context.on("response", lambda r: asyncio.ensure_future(on_response(r)))
-        print(f"Capture mode: place one small bet by hand in the Chrome window. Recording to {out_path}")
+        for pg in self.context.pages:
+            pg.on("websocket", on_websocket)
+        self.context.on("page", lambda pg: pg.on("websocket", on_websocket))
+        print(f"Capture mode: log in, browse a league and a game, then place one small bet by hand.\n"
+              f"Recording to {out_path} (summary: {summary_path}). Close this window when done.")
         await asyncio.sleep(seconds)
+
+
+_STATIC = re.compile(r"\.(svg|png|jpe?g|gif|webp|ico|css|js|woff2?|ttf|map)$", re.I)
+_SECRET_KEYS = re.compile(r"pass|pwd|token|secret|pin$|otp|auth|session|cookie|card|cvv", re.I)
+
+
+def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
+    return {k: ("<redacted>" if _SECRET_KEYS.search(k) else v) for k, v in headers.items()}
+
+
+def _redact_body(body: Any) -> Any:
+    if not body:
+        return body
+    try:
+        data = json.loads(body)
+    except (TypeError, ValueError):
+        # form-encoded or plain text: blank out key=value pairs with secret-looking keys
+        return re.sub(r"((?:^|[&\s])[^=&\s]*(?:pass|pwd|token|secret|otp|session)[^=&\s]*=)[^&\s]*",
+                      r"\1<redacted>", str(body), flags=re.I)
+
+    def walk(x: Any) -> Any:
+        if isinstance(x, dict):
+            return {k: ("<redacted>" if _SECRET_KEYS.search(str(k)) else walk(v)) for k, v in x.items()}
+        if isinstance(x, list):
+            return [walk(v) for v in x]
+        return x
+
+    return json.dumps(walk(data))
+
+
+def _capture_summary(records: list[dict[str, Any]]) -> str:
+    """A compact text version of a capture that's small enough to paste into a chat."""
+    lines: list[str] = []
+    shown: dict[str, int] = {}
+    for r in records:
+        if "click" in r:
+            path = " < ".join(filter(None, (f"{c.get('tag')}[{c.get('testid') or ''}]{(c.get('text') or '')[:30]!r}"
+                                            for c in r["click"][:4])))
+            lines.append(f"CLICK {path}")
+        elif "websocket" in r:
+            lines.append(f"WEBSOCKET {r['websocket']}")
+        elif "ws" in r:
+            k = f"ws:{r['ws']}:{r['dir']}"
+            shown[k] = shown.get(k, 0) + 1
+            if shown[k] <= 5:
+                lines.append(f"WS {r['dir']}: {str(r['data'])[:600]}")
+        else:
+            k = f"{r['method']} {r['url'].split('?')[0]}"
+            shown[k] = shown.get(k, 0) + 1
+            if shown[k] > 2 or r["type"] == "document" and r["method"] == "GET":
+                if r["type"] == "document":
+                    lines.append(f"PAGE {r['url'][:200]} -> {r['status']}")
+                continue
+            resp = r["response"] if isinstance(r["response"], str) else json.dumps(r["response"])
+            lines.append(f"{r['method']} {r['url'][:300]} -> {r['status']}")
+            if r.get("request"):
+                lines.append(f"  sent: {str(r['request'])[:1500]}")
+            lines.append(f"  got:  {resp[:1500]}")
+    return "\n".join(lines) + "\n"
 
 
 class BrowserTransport:

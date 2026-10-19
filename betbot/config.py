@@ -51,10 +51,19 @@ class HumanConfig(BaseModel):
     active_hours: ActiveHours = ActiveHours()
 
 
+# Books the bot knows how to reach, for commands like `betbot capture MYB` before a book is configured.
+KNOWN_BOOKS = {
+    "OZ": ("https://www.ozoon.eu", "/sports"),
+    "BV": ("https://www.bovada.lv", "/sports"),
+    "MYB": ("https://engine.mybookie.ag", "/sports/home"),
+}
+
+
 class BookConfig(BaseModel):
     enabled: bool = True
     adapter: str = "bodog"
     base_url: str
+    start_path: str = "/sports"  # page the browser opens on
     account: str = ""             # label for this PC's account, used in the ledger and credentials
     auto_mode: PlaceMode = "api"
     one_click_mode: PlaceMode = "ui"
