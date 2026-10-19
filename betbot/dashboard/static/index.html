@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BetBot</title>
+<style>
+  :root { --bg:#f6f7f9; --panel:#fff; --text:#1d2330; --muted:#6b7385; --line:#e3e6ec;
+          --good:#137a3a; --warn:#a15c00; --bad:#b42318; --accent:#2457d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171d; --panel:#1c2028; --text:#e7eaf0; --muted:#97a0b2; --line:#2c323d;
+            --good:#4cc47a; --warn:#e3a23b; --bad:#ff6b5e; --accent:#7aa2ff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.4 system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:2; }
+  header h1 { font-size:16px; margin:0 8px 0 0; }
+  .pill { padding:2px 8px; border-radius:999px; border:1px solid var(--line); font-size:12px; color:var(--muted); }
+  .pill.good { color:var(--good); border-color:var(--good); } .pill.bad { color:var(--bad); border-color:var(--bad); }
+  .pill.warn { color:var(--warn); border-color:var(--warn); }
+  main { padding:16px; display:grid; gap:16px; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+  h2 { font-size:14px; margin:0 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .pos { color:var(--good); font-weight:600; } .neg { color:var(--muted); }
+  button { font:inherit; padding:4px 10px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { background:var(--bad); border-color:var(--bad); color:#fff; }
+  input[type=number] { width:80px; font:inherit; padding:3px 6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); }
+  label { display:inline-flex; gap:6px; align-items:center; color:var(--muted); }
+  .queue { display:grid; gap:8px; }
+  .card { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .card .what { font-weight:600; } .card .sub { color:var(--muted); font-size:12px; }
+  .muted { color:var(--muted); }
+  #toast { position:fixed; right:16px; bottom:16px; display:grid; gap:6px; z-index:3; }
+  #toast div { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--accent); padding:8px 12px; border-radius:6px; max-width:360px; }
+  #toast div.alert { border-left-color:var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>BetBot</h1>
+  <span id="books"></span>
+  <label><input type="checkbox" id="auto"> Auto betting</label>
+  <label><input type="checkbox" id="dry"> Dry run</label>
+  <label>Stake <input type="number" id="stake" step="5" min="0"></label>
+  <label>Auto ≥ <input type="number" id="auto_min" step="1"></label>
+  <label>Queue ≥ <input type="number" id="borderline_min" step="1"></label>
+  <button class="danger" id="kill">Stop auto</button>
+  <span id="feeds" class="muted"></span>
+</header>
+<main>
+  <section>
+    <h2>One-click queue <span class="muted" id="qcount"></span></h2>
+    <div class="queue" id="queue"><span class="muted">Nothing waiting.</span></div>
+  </section>
+  <section>
+    <h2>Feed rows (enabled books)</h2>
+    <table><thead><tr><th>Arb</th><th>Now</th><th>Book</th><th>League</th><th>Bet</th><th>Feed price</th><th>Book selection</th><th>Category</th><th>State</th><th>Why</th></tr></thead>
+    <tbody id="rows"></tbody></table>
+  </section>
+  <section>
+    <h2>Recent bets</h2>
+    <table><thead><tr><th>Time</th><th>Book</th><th>Bet</th><th>Stake</th><th>Price</th><th>Arb</th><th>How</th><th>Result</th><th>Timing</th></tr></thead>
+    <tbody id="bets"></tbody></table>
+  </section>
+</main>
+<div id="toast"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const dec2am = (d) => !d ? "" : d >= 2 ? "+" + Math.round((d - 1) * 100) : String(Math.round(-100 / (d - 1)));
+let state = null, editing = false, seenQueue = new Set();
+
+function beep() {
+  try { const a = new AudioContext(), o = a.createOscillator(), g = a.createGain();
+        o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = 0.08;
+        o.start(); o.stop(a.currentTime + 0.18); } catch (e) {}
+}
+function notify(msg, cls) {
+  const d = document.createElement("div"); d.className = cls || ""; d.textContent = msg;
+  $("toast").appendChild(d); setTimeout(() => d.remove(), 8000);
+  if (cls === "alert" || cls === "queue") {
+    beep();
+    if ("Notification" in window && Notification.permission === "granted") new Notification("BetBot", {body: msg});
+  }
+}
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  return r.json();
+}
+function arbCell(v) { return v == null ? '<td class="num muted">–</td>' : `<td class="num ${v > 0 ? "pos" : "neg"}">${v > 0 ? "+" : ""}${v}</td>`; }
+function betText(r) { return `${esc(r.sq_team)} ${esc(r.bettype)} ${r.line ?? ""}${r.live ? " · LIVE " + esc(r.livetime || "") : ""}`; }
+
+function render() {
+  if (!state) return;
+  const s = state.settings;
+  if (!editing) {
+    $("auto").checked = s.auto_enabled; $("dry").checked = s.dry_run; $("stake").value = s.stake;
+    $("auto_min").value = s.auto_min; $("borderline_min").value = s.borderline_min;
+  }
+  $("books").innerHTML = Object.entries(state.books).map(([code, b]) => {
+    const cls = !b.enabled ? "" : b.paused ? "bad" : b.logged_in === false ? "warn" : "good";
+    const txt = !b.enabled ? "off" : b.paused ? "paused: " + b.paused : b.logged_in === false ? "logged out" :
+                b.logged_in ? "logged in" + (b.balance != null ? " · $" + b.balance.toFixed(2) : "") : "no browser";
+    const resume = b.paused ? ` <button onclick='post("/api/settings",{books:{${JSON.stringify(code)}:{unpause:true}}}).then(load)'>Resume</button>` : "";
+    return `<span class="pill ${cls}">${esc(code)}: ${esc(txt)} · auto=${b.mode}, click=${b.one_click_mode}</span>${resume}`;
+  }).join(" ");
+  const bad = state.feeds.filter(f => !f.ok);
+  $("feeds").textContent = `${state.feeds.length} feeds` + (bad.length ? ` · ${bad.length} failing` : "");
+  const queued = state.rows.filter(r => r.state === "queued");
+  $("qcount").textContent = queued.length ? `(${queued.length})` : "";
+  $("queue").innerHTML = queued.length ? queued.map(r => `
+    <div class="card"><div>
+      <div class="what">${betText(r)} <span class="muted">· ${esc(r.book)} ${esc(r.league)}</span></div>
+      <div class="sub">${esc(r.event || "")} · ${esc(r.selection || "not quoted")} · feed arb ${r.arbsize}, now ${r.live_arbsize ?? "?"} ${r.reason ? "· " + esc(r.reason) : ""}</div>
+    </div><div>
+      <button class="primary" onclick="place('${esc(r.id)}')">Place</button>
+      <button onclick="place('${esc(r.id)}','api')" title="Place through the site API (faster)">Fast</button>
+      <button onclick="post('/api/dismiss',{row_id:'${esc(r.id)}'}).then(load)">Dismiss</button>
+    </div></div>`).join("") : '<span class="muted">Nothing waiting.</span>';
+  for (const r of queued) if (!seenQueue.has(r.id)) { seenQueue.add(r.id); notify(`Borderline: ${r.sq_team} ${r.bettype} ${r.line ?? ""} (${r.arbsize})`, "queue"); }
+  $("rows").innerHTML = state.rows.map(r => `<tr>
+    ${arbCell(r.arbsize)}${arbCell(r.live_arbsize)}<td>${esc(r.book)}</td><td>${esc(r.league)}</td><td>${betText(r)}</td>
+    <td class="num">${dec2am(r.sqline)} / ${dec2am(r.pinnline)}</td><td>${esc(r.selection || r.event || "")}</td>
+    <td>${esc(r.category)}</td><td>${esc(r.state)}</td><td class="muted">${esc(r.reason)}</td></tr>`).join("");
+  $("bets").innerHTML = state.bets.map(b => { const t = JSON.parse(b.timings || "{}"); return `<tr>
+    <td>${new Date(b.ts * 1000).toLocaleTimeString()}</td><td>${esc(b.book)}</td><td>${esc(b.description)}</td>
+    <td class="num">${b.stake}</td><td class="num">${dec2am(b.decimal)}</td><td class="num">${b.arbsize == null ? "" : b.arbsize.toFixed(1)}</td>
+    <td>${esc(b.trigger)}/${esc(b.mode)}${b.dry_run ? " (dry)" : ""}</td><td>${esc(b.status)} ${esc(b.reference || b.reason || "")}</td>
+    <td class="num">${t.final_ms ? (t.final_ms / 1000).toFixed(1) + "s" : t.post_ms ? (t.post_ms / 1000).toFixed(1) + "s" : ""}</td></tr>`; }).join("");
+}
+async function load() { state = await (await fetch("/api/state")).json(); render(); }
+async function place(id, mode) {
+  const r = await post("/api/place", {row_id: id, mode});
+  notify(`${r.status}: ${r.reason || r.reference || ""}`, r.status === "accepted" || r.status === "dry_run" ? "" : "alert");
+  load();
+}
+for (const id of ["stake", "auto_min", "borderline_min"]) {
+  $(id).addEventListener("focus", () => editing = true);
+  $(id).addEventListener("change", async () => { editing = false; await post("/api/settings", {[id]: Number($(id).value)}); load(); });
+}
+$("auto").addEventListener("change", () => post("/api/settings", {auto_enabled: $("auto").checked}).then(load));
+$("dry").addEventListener("change", () => {
+  if (!$("dry").checked && !confirm("Turn off dry run? Real bets will be placed.")) { $("dry").checked = true; return; }
+  post("/api/settings", {dry_run: $("dry").checked}).then(load);
+});
+$("kill").addEventListener("click", () => post("/api/kill").then(load));
+if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+
+let timer = null;
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === "alert") notify(m.message, "alert");
+    else if (m.type === "info") notify(m.message);
+    else if (m.type === "bet") notify(`Bet ${m.status}: ${m.row.sq_team} ${m.row.bettype} ${m.row.line ?? ""} — ${m.row.reason}`);
+    clearTimeout(timer); timer = setTimeout(load, 150);
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect(); load(); setInterval(load, 3000);
+</script>
+</body>
+</html>

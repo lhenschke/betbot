@@ -1,0 +1,71 @@
+# BetBot configuration. Copy to config.yaml (run.bat does this the first time).
+# Most of these can also be changed live from the dashboard (http://127.0.0.1:8765).
+
+# League feeds to watch. Add a line to add a league; nothing else is needed.
+feeds:
+  - https://arbhunterpro.com/json?nfl-pro
+  - https://arbhunterpro.com/json?ncaaf-pro
+  - https://arbhunterpro.com/json?mlb-pro
+  - https://arbhunterpro.com/json?nhl-pro
+feed_interval_s: 1.0
+feed_date_tz: UTC          # timezone of the feed's "date" field (used for live staleness)
+
+dry_run: true              # true = do everything except actually submit bets
+auto_enabled: true         # master switch for automatic bets (dashboard "Stop auto")
+
+thresholds:
+  auto_min: 1              # arbsize at or above this is bet automatically
+  borderline_min: -3       # arbsize from here up to auto_min goes to the one-click queue
+  one_click_tolerance: 1   # a one-click bet may slip this many cents below what you saw
+  max_live_age_s: 15       # don't bet live rows whose Pinnacle price is older than this
+  max_prematch_age_s: 0    # 0 = no age check for pre-match rows
+
+stake:
+  default: 50
+  round_to: 5              # stakes are rounded down to a multiple of this (looks human)
+  min_stake: 5
+  max_per_event: 500       # total staked on one game, per account
+  daily_cap: 5000
+
+pacing:
+  min_gap_s: 4             # minimum time between automatic bets
+  max_per_minute: 4
+  max_per_hour: 40
+  skip_marginal_pct: 0.0   # e.g. 0.1 = randomly skip 10% of bets right at the auto threshold
+  prematch_delay_s: [0.3, 1.2]   # random pause before submitting an automatic bet
+  live_delay_s: [0.1, 0.4]
+  pause_after_rejections: 5
+
+human:
+  idle_browsing: true      # browse league/live pages now and then while waiting
+  idle_every_s: [45, 180]
+  typing_delay_ms: [60, 190]
+  active_hours:            # only bet automatically during these hours
+    enabled: false
+    start: "08:00"
+    end: "23:59"
+    timezone: America/Vancouver
+
+books:
+  OZ:
+    enabled: true
+    adapter: bodog         # Bovada platform; BV (Bovada) can reuse it with base_url https://www.bovada.lv
+    base_url: https://www.ozoon.eu
+    account: me            # a label for this PC's OZ account (credentials are stored under it)
+    auto_mode: api         # automatic bets: the site's own API from inside the page (fast)
+    one_click_mode: ui     # one-click bets: real mouse and typing in the bet slip
+    stake: null            # per-book stake override
+    min_request_gap_s: 0.75
+    catalog_refresh_s: 60
+    live_catalog_refresh_s: 5
+    leagues: {}            # only if auto-discovery can't find one, e.g. {NCAAF: /football/college-football}
+    ui_selectors: {}       # only if the site changes; see README "Capture mode"
+    login_selectors: {}
+
+data_dir: data
+profile_dir: profiles      # Chrome profiles (one per book/account) live here
+dashboard_host: 127.0.0.1  # 0.0.0.0 to open the dashboard from your phone on the same network
+dashboard_port: 8765
+browser_channel: chrome    # use the installed Google Chrome
+browser_path: ""
+headless: false

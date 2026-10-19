@@ -1,0 +1,45 @@
+# How feed rows map to markets on Bovada-platform books (Ozoon, Bovada).
+# Same rules for every sport: the spread market is 2W-HCAP whether the book
+# calls it Point Spread, Puck Line or Runline.
+
+# Feed bettype -> market key, which outcome to pick, and which feed field is the line.
+bettypes:
+  ATS:       {market_key: 2W-HCAP, pick: team,  line: spread}
+  SPREAD:    {market_key: 2W-HCAP, pick: team,  line: spread}
+  RUNLINE:   {market_key: 2W-HCAP, pick: team,  line: spread}
+  PUCKLINE:  {market_key: 2W-HCAP, pick: team,  line: spread}
+  OVER:      {market_key: 2W-OU,   pick: over,  line: total}
+  UNDER:     {market_key: 2W-OU,   pick: under, line: total}
+  ML:        {market_key: 2W-12,   pick: team,  line: none}
+  MONEYLINE: {market_key: 2W-12,   pick: team,  line: none}
+
+# Period tokens that may appear in a feed bettype (e.g. "1H ATS") -> the book's
+# period.abbreviation. No token means full game.
+periods:
+  "":  G
+  G:   G
+  FG:  G
+  GAME: G
+  1H:  1H
+  2H:  2H
+  1Q:  Q1
+  Q1:  Q1
+  2Q:  Q2
+  Q2:  Q2
+  3Q:  Q3
+  Q3:  Q3
+  4Q:  Q4
+  Q4:  Q4
+  1P:  P1
+  P1:  P1
+  2P:  P2
+  3P:  P3
+
+# Names a book may use for a feed league, for automatic league discovery.
+# A league not listed here is looked up by its own name (NFL, NHL, MLB, NBA...).
+league_names:
+  NCAAF: [College Football, NCAA Football, NCAAF]
+  NCAAB: [College Basketball, NCAA Basketball, NCAAB]
+  CFL:   [CFL]
+  WNBA:  [WNBA]
+  EPL:   [Premier League, English Premier League]

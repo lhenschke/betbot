@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+config.yaml
+data/
+profiles/
+*.sqlite3
+*.log
+betbot.egg-info/
