@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 PlaceMode = Literal["api", "ui"]
 
@@ -51,15 +51,18 @@ class HumanConfig(BaseModel):
     active_hours: ActiveHours = ActiveHours()
 
 
-# Books the bot knows how to reach, for commands like `betbot capture MYB` before a book is configured.
+# Books the bot knows how to reach, for commands like `betbot capture MyB` before a book is configured.
+# Keys are the feed's book codes.
 KNOWN_BOOKS = {
     "OZ": ("https://www.ozoon.eu", "/sports"),
     "BV": ("https://www.bovada.lv", "/sports"),
-    "MYB": ("https://engine.mybookie.ag", "/sports/home"),
+    "MyB": ("https://engine.mybookie.ag", "/sports/home"),
 }
 
 
 class BookConfig(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)  # leagues: {MLB: 1234} works unquoted
+
     enabled: bool = True
     adapter: str = "bodog"
     base_url: str
@@ -118,6 +121,13 @@ class Config(BaseModel):
         Path(path).write_text(
             yaml.safe_dump(self.model_dump(mode="json"), sort_keys=False, allow_unicode=True),
             encoding="utf-8")
+
+    def book_code(self, name: str) -> str:
+        """The configured (or known) spelling of a book code typed in any case: 'MYB' -> 'MyB'."""
+        for code in [*self.books, *KNOWN_BOOKS]:
+            if code.upper() == name.upper():
+                return code
+        return name
 
     def stake_for(self, book: str) -> float:
         bc = self.books.get(book)

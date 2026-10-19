@@ -1,0 +1,29 @@
+# How feed rows map to markets on MyBookie. Each game in a leagues-lines reply
+# carries its main full-game markets under gameMarketTypes: moneyLine, spread
+# (point spread, puck line or run line) and total.
+
+# Feed bettype -> gameMarketTypes key, which outcome to pick, and which feed field is the line.
+bettypes:
+  ATS:       {market: spread,    pick: team,  line: spread}
+  SPREAD:    {market: spread,    pick: team,  line: spread}
+  RUNLINE:   {market: spread,    pick: team,  line: spread}
+  PUCKLINE:  {market: spread,    pick: team,  line: spread}
+  OVER:      {market: total,     pick: over,  line: total}
+  UNDER:     {market: total,     pick: under, line: total}
+  ML:        {market: moneyLine, pick: team,  line: none}
+  MONEYLINE: {market: moneyLine, pick: team,  line: none}
+
+# Only full-game lines for now: halves and quarters are separate MyBookie
+# leagues (e.g. "NFL 1st Half"), so "1H ATS" is reported as unsupported.
+periods:
+  "":   G
+  G:    G
+  FG:   G
+  GAME: G
+
+# Feed league -> MyBookie leagueId (the "Game Odds" league, from the site's menu).
+# Others can be set per PC under books.MyB.leagues; a capture shows the id in
+# each leagues-lines request ({"leagueId": "79", ...}) when you open the league.
+league_ids:
+  NFL: "79"
+  NHL: "4345"

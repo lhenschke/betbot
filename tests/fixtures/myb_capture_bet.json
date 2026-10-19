@@ -1,0 +1,334 @@
+{
+ "bet_options_request": {
+  "bets": [
+   {
+    "type": "straight",
+    "wagerType": 0,
+    "openSpots": 0,
+    "wagerDetailCount": 1,
+    "OutComeList": [
+     {
+      "id": 526067947,
+      "MarketType": "sp",
+      "IsAlreadyPlacedInOpenBet": "false",
+      "BettingFrom": 0,
+      "BetBoostId": null
+     }
+    ]
+   }
+  ],
+  "FillIdWager": null,
+  "IsOnOpenBets": "false",
+  "IncludeBetTypes": "false",
+  "BetTypesRequestModel": {
+   "listSelection": [
+    {
+     "lineSportId": 4
+    }
+   ],
+   "fillOpenSpots": "false",
+   "betId": null
+  }
+ },
+ "bet_options_response": {
+  "content": [
+   {
+    "securityCode": "0123456789abcdef0123456789abcdef",
+    "freePlayAvailable": 0,
+    "idWagerType": 44968,
+    "selections": [
+     {
+      "gameId": 29912810,
+      "sportId": 4,
+      "marketId": 171482318,
+      "outComeId": 526067947,
+      "gameDescription": "Washington Commanders vs. San Francisco 49ers",
+      "marketDescription": "Handicap (incl. overtime)",
+      "outComeDescription": "Washington Commanders (+7.5)",
+      "odd": -120,
+      "parlayable": true,
+      "marketType": "sp",
+      "soccerHookups": false,
+      "allowTeaser": true,
+      "lineMarketId": 289,
+      "lineSportId": 4,
+      "providerOutComeId": "1715",
+      "point": 7.5,
+      "sportViewType": 6,
+      "isLive": false,
+      "availableBuyPoints": null,
+      "showGroup": 1,
+      "limits": {
+       "min_bet": 0.01,
+       "max_bet": 100,
+       "max_payout_amount": 10000,
+       "parlay_table_row": {
+        "idProfile": 0,
+        "numTeams": 0,
+        "idWagerType": 0,
+        "odds": 0,
+        "maxRisk": 0,
+        "maxPayout": 0,
+        "extraJuice": 0,
+        "maxOpenSpots": null,
+        "maxDogLines": 0,
+        "lastModification": "0001-01-01T00:00:00",
+        "lastModificationUser": 0,
+        "maxMoneyLines": 0,
+        "maxTotalLines": 0
+       },
+       "parlay_table": [
+        {
+         "idProfile": 1534,
+         "numTeams": 1,
+         "idWagerType": 88867,
+         "odds": 0.91,
+         "maxRisk": 100000,
+         "maxPayout": 100000,
+         "extraJuice": 0,
+         "maxOpenSpots": 1,
+         "maxDogLines": 1,
+         "lastModification": "2024-12-06T14:57:46.417",
+         "lastModificationUser": 1166,
+         "maxMoneyLines": 1,
+         "maxTotalLines": 1
+        }
+       ],
+       "limit_type": 0,
+       "stakeFactor": null
+      },
+      "bettingFrom": 0,
+      "visitorPitcher": null,
+      "sportName": "American Football",
+      "homePitcher": null,
+      "pitcherOptions": [],
+      "isAlreadyPlacedInOpenBet": false,
+      "error": {
+       "errorMessageKey": null,
+       "errorMessageParams": null,
+       "errorMessage": null,
+       "isSuccess": true
+      },
+      "gameTournamentId": 79,
+      "homeTeamId": 611,
+      "visitorTeamId": 596,
+      "isTotalOver": false,
+      "isTotalUnder": false,
+      "isFavorite": true,
+      "betBoostId": null,
+      "totalOdd": null,
+      "isCashoutAvailable": false,
+      "lineCategoryId": 16,
+      "lineTournamentTypeId": 1,
+      "promoCode": null,
+      "betAndGetId": null,
+      "betandGetPromotionName": null,
+      "betandGetPromotionDescription": null,
+      "providerId": 1,
+      "providerEventId": "sr:match:71515924",
+      "providerMarketId": null,
+      "isSGP": null,
+      "competitorId": null,
+      "pbtItem": null,
+      "category": "USA",
+      "originalOdd": null,
+      "betandGetDetails": null,
+      "prop": false
+     }
+    ],
+    "isFillOpenBets": false,
+    "fillIdWager": null,
+    "riskWin": 0,
+    "limits": {
+     "min_bet": 0.01,
+     "max_bet": 100,
+     "max_payout_amount": 10000,
+     "parlay_table_row": {
+      "idProfile": 0,
+      "numTeams": 0,
+      "idWagerType": 0,
+      "odds": 0,
+      "maxRisk": 0,
+      "maxPayout": 0,
+      "extraJuice": 0,
+      "maxOpenSpots": null,
+      "maxDogLines": 0,
+      "lastModification": "0001-01-01T00:00:00",
+      "lastModificationUser": 0,
+      "maxMoneyLines": 0,
+      "maxTotalLines": 0
+     },
+     "parlay_table": [],
+     "limit_type": 0,
+     "stakeFactor": 0.1
+    },
+    "openSpotOptions": [],
+    "openSpots": 0,
+    "options": [],
+    "availableTeaserPoints": [],
+    "teaserSupports": {},
+    "betTypes": [
+     "straight",
+     "parlay"
+    ],
+    "wagerType": 0,
+    "promoCode": null,
+    "betAndGetId": null,
+    "betandGetPromotionName": null,
+    "betandGetPromotionDescription": null,
+    "sgpTotalOdds": null,
+    "boostPercent": null,
+    "boostedOdds": null,
+    "totalOdds": null,
+    "bettingFrom": 0,
+    "minimumRiskAmount": null,
+    "defaultRiskAmounts": [
+     25,
+     50,
+     100
+    ],
+    "betandGetDetails": null,
+    "errorMessageKey": null,
+    "errorMessageParams": null,
+    "errorMessage": null,
+    "isSuccess": true
+   }
+  ],
+  "lineType": "E",
+  "promBlock": 1
+ },
+ "place_request": {
+  "UseFreePlayAvailable": "false",
+  "IfBetRiskAmount": 0,
+  "MainWagerType": 0,
+  "AcceptOddsChanges": "false",
+  "SecurityCode": "0123456789abcdef0123456789abcdef",
+  "IsMoneyBagPlace": "false",
+  "Bets": [
+   {
+    "betId": 526067947,
+    "type": "straight",
+    "amount": "2",
+    "wagerType": 0,
+    "idWagerType": 44968,
+    "roundRobinCombinations": 1,
+    "riskWin": 2,
+    "openSpots": 0,
+    "FillIdWager": null,
+    "teaserCombinations": 0,
+    "details": [
+     {
+      "outComeId": 526067947,
+      "sportId": 4,
+      "lineMarketId": 289,
+      "marketId": 171482318,
+      "gameId": 29912810,
+      "lineTournamentId": 79,
+      "marketType": "sp",
+      "odd": -120,
+      "points": "7.5",
+      "originalPoints": 0,
+      "pointsPurchased": 0,
+      "isLive": "false",
+      "pitcher": 0,
+      "pointsPurchasedJuice": 0,
+      "isAlreadyPlacedInOpenBet": "false",
+      "sportName": "American Football",
+      "bettingForm": 0,
+      "outcomeType": "visitor",
+      "point": 7.5,
+      "bettingFrom": 0,
+      "providerOutComeId": "1715"
+     }
+    ]
+   }
+  ]
+ },
+ "place_response": {
+  "content": [
+   {
+    "ticketNumber": "302000001",
+    "wagerType": "straight",
+    "teaserName": null,
+    "input_risk_amount": 2,
+    "input_win_amount": 1.67,
+    "placed_at": "2026-10-19T19:44:56.2248699-04:00",
+    "details": [
+     {
+      "outComeId": 526067947,
+      "outComeDescription": "Washington Commanders (+7.5)",
+      "marketDescription": "Handicap (incl. overtime)",
+      "gameDescription": "Washington Commanders vs. San Francisco 49ers",
+      "marketType": "sp",
+      "odd": -120,
+      "point": 7.5,
+      "pitcherOptions": [],
+      "pitcher": 0,
+      "category": "USA",
+      "originalOdd": 0
+     }
+    ],
+    "placeBetDetails": [
+     {
+      "outComeId": 526067947,
+      "sportId": 4,
+      "lineMarketId": 289,
+      "marketId": 171482318,
+      "gameId": 29912810,
+      "lineCategoryId": 16,
+      "lineTournamentId": 79,
+      "marketType": "sp",
+      "odd": -120,
+      "points": 7.5,
+      "originalPoints": 0,
+      "pointsPurchased": 0,
+      "isLive": false,
+      "detailDescription": "Washington Commanders (+7.5)~~Handicap (incl. overtime)~~Washington Commanders vs. San Francisco 49ers",
+      "pitcher": 0,
+      "pointsPurchasedJuice": 0,
+      "isAlreadyPlacedInOpenBet": false,
+      "providerOutComeId": "1715",
+      "showgroup": 0,
+      "marketLimit": 20000,
+      "active": false,
+      "bettingFrom": 0,
+      "isFavorite": false,
+      "isTotalOver": false,
+      "isTotalUnder": false,
+      "probabilities": 0.4985865401,
+      "isHeaderEarlyCashout": true,
+      "isMarketEarlyCashout": true,
+      "isGameMarketSettingEarlyCashout": true,
+      "minimumMarketLimit": null,
+      "betBoostId": null,
+      "matrixId": null,
+      "competitorId": null,
+      "providerId": 0,
+      "originalOutcomeid": "1",
+      "selectedPBTId": null,
+      "lotterySelections": null,
+      "originalOdd": 0,
+      "lineTournamentType": 1
+     }
+    ],
+    "totalOdds": "",
+    "boostedOdds": "",
+    "boostPercent": 0,
+    "betAndGetId": null,
+    "bettingFrom": 0,
+    "pbtItem": null,
+    "errorMessageKey": null,
+    "errorMessageParams": null,
+    "errorMessage": null,
+    "isSuccess": true
+   }
+  ],
+  "lineType": "E"
+ },
+ "balance_response": {
+  "available": "$18.00",
+  "pending": "$2.00",
+  "free_play": "$0.00",
+  "current": "$20.00"
+ }
+}

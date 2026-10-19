@@ -22,7 +22,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from . import human
 
@@ -92,7 +92,9 @@ CAPTURE_CLICK_JS = """
   document.addEventListener('click', (ev) => {
     const path = ev.composedPath().filter(n => n instanceof Element).slice(0, 6).map(n => ({
       tag: n.tagName, testid: n.getAttribute('data-testid'), cls: (n.className || '').toString().slice(0, 80),
-      text: (n.innerText || '').slice(0, 60)}));
+      text: (n.innerText || '').slice(0, 60),
+      attrs: Object.fromEntries([...n.attributes].filter(a => a.name === 'id' || a.name.startsWith('data-'))
+                                .map(a => [a.name, a.value.slice(0, 80)]))}));
     window.betbotClick && window.betbotClick(JSON.stringify(path));
   }, true);
 }
@@ -116,6 +118,8 @@ class BrowserSession:
         self.page: Any = None
         self.api_page: Any = None
         self._nav_task: asyncio.Task | None = None
+        # A book whose site has no window.OL sets its own login check here (see is_logged_in).
+        self.logged_in_check: Callable[[], Awaitable[bool]] | None = None
         self.lock = asyncio.Lock()  # one bet / one login at a time per browser
 
     async def start(self) -> None:
@@ -156,6 +160,13 @@ class BrowserSession:
             return await page.evaluate(js, arg, isolated_context=False)
         return await page.evaluate(js, arg)
 
+    async def evaluate(self, js: str, arg: Any = None) -> Any:
+        """Run js in the background tab's main world, e.g. to read the site's CSRF token."""
+        return await self._eval(self.api_page, js, arg)
+
+    async def reload_api(self) -> None:
+        await self.api_page.goto(self.base_url + self.start_path, wait_until="domcontentloaded")
+
     # ----- the site's API, from inside the page -----------------------------
     async def request(self, method: str, path: str, *, body: Any = None,
                       headers: dict[str, str] | None = None) -> tuple[int, Any]:
@@ -166,7 +177,7 @@ class BrowserSession:
             status, data = await self._eval(self.api_page, FETCH_JS, [method, url, body, headers or {}])
         except Exception as e:  # tab reloaded mid-call, etc.
             log.warning("in-page fetch failed (%s); reloading api tab", e)
-            await self.api_page.goto(self.base_url + "/sports", wait_until="domcontentloaded")
+            await self.reload_api()
             status, data = await self._eval(self.api_page, FETCH_JS, [method, url, body, headers or {}])
         return int(status), data
 
@@ -179,6 +190,8 @@ class BrowserSession:
         return {"ready": False, "auth": False, "sid": None}
 
     async def is_logged_in(self) -> bool:
+        if self.logged_in_check:
+            return await self.logged_in_check()
         return bool((await self.auth()).get("auth"))
 
     async def session_id(self) -> str | None:
@@ -222,7 +235,7 @@ class BrowserSession:
         page = self.page
         await page.bring_to_front()
         if self.base_url not in page.url:
-            await self.visit(self.base_url + "/sports")
+            await self.visit(self.base_url + self.start_path)
         await self.accept_cookies()
         pw_box = page.locator(s["password"]).first
         if not await pw_box.is_visible():
@@ -278,13 +291,17 @@ class BrowserSession:
         return await self.page.get_by_text(re.compile(s["challenge_text"], re.I)).count() > 0
 
     async def _logged_in_after_submit(self, reload_api: bool) -> bool:
+        if self.logged_in_check:
+            if reload_api:
+                await self.reload_api()
+            return await self.logged_in_check()
         try:
             st = await self._eval(self.page, AUTH_JS)
         except Exception:  # the page is navigating after submit
             st = {}
         if st.get("auth") or reload_api:
             # the api tab picks up the new session cookies on reload
-            await self.api_page.goto(self.base_url + "/sports", wait_until="domcontentloaded")
+            await self.reload_api()
             return await self.is_logged_in()
         return False
 

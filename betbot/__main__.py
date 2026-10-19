@@ -168,8 +168,9 @@ def main() -> None:
     setup_logging(Path(cfg.data_dir), args.verbose)
 
     if args.cmd == "set-credentials":
-        bc = cfg.books.get(args.book)
-        prompt_and_store(args.book, (bc.account if bc else "") or "default")
+        book = cfg.book_code(args.book)
+        bc = cfg.books.get(book)
+        prompt_and_store(book, (bc.account if bc else "") or "default")
     elif args.cmd == "check":
         asyncio.run(cmd_check(cfg))
     elif args.cmd == "capture":
@@ -183,6 +184,7 @@ async def cmd_capture(cfg: Config, book: str, minutes: float) -> None:
 
     from .config import KNOWN_BOOKS
 
+    book = cfg.book_code(book)
     bc = cfg.books.get(book)
     if bc:
         base_url, start_path, account = bc.base_url, bc.start_path, bc.account or "default"

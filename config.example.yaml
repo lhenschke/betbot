@@ -61,6 +61,20 @@ books:
     leagues: {}            # only if auto-discovery can't find one, e.g. {NCAAF: /football/college-football}
     ui_selectors: {}       # only if the site changes; see README "Capture mode"
     login_selectors: {}
+  MyB:                     # MyBookie (the feed's code is MyB, with this exact case)
+    enabled: true
+    adapter: mybookie
+    base_url: https://engine.mybookie.ag
+    start_path: /sports/home
+    account: me            # a label for this PC's MyBookie account
+    auto_mode: api
+    one_click_mode: api    # clicking MyBookie's bet slip isn't set up yet
+    stake: null
+    min_request_gap_s: 0.75
+    catalog_refresh_s: 60
+    live_catalog_refresh_s: 5
+    leagues: {}            # NFL and NHL are built in; add others as leagueIds, e.g. {MLB: "1234"}
+    login_selectors: {}
 
 auto_update: true         # pull new versions from GitHub and restart (only when no bet is in progress)
 update_check_minutes: 10

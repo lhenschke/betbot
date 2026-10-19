@@ -5,7 +5,7 @@ Places the value bets found by the [arbhunterpro](https://arbhunterpro.com) feed
 - clearly valuable lines (`arbsize` ≥ 1 by default) are bet **automatically**;
 - borderline lines (−3 to 0) go to a **one-click queue** on a local dashboard.
 
-It starts with **Ozoon (`OZ`)**. Books are modules that can be switched on and off, and new league feeds need only a line of config.
+It supports **Ozoon (`OZ`)** and **MyBookie (`MyB`)**. Books are modules that can be switched on and off, and new league feeds need only a line of config.
 
 Each PC runs its own copy with its own book account. The bot works through a **real Chrome window that you are logged into**. It logs back in by itself when needed, and behaves like a person: curved mouse movements, uneven typing, pauses, idle browsing and bet pacing.
 
@@ -57,7 +57,8 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
    For a private repo, a GitHub sign-in window appears the first time; sign in once and Windows remembers it.
 3. Double-click **`run.bat`**. The first time, it installs everything, creates `config.yaml` and opens it.
    - Set `books.OZ.account` to a label for this PC's account, e.g. `lee-desktop`.
-4. Double-click **`set-credentials.bat`** and enter the OZ email and password. They are stored in **Windows Credential Manager**, never in a file.
+   - Do the same for `books.MyB`, or set its `enabled: false` if this PC has no MyBookie account.
+4. Double-click **`set-credentials.bat`**, type the book (`OZ` or `MyB`), and enter its email and password. Do it once per book. They are stored in **Windows Credential Manager**, never in a file.
 5. Double-click **`run.bat`** again.
    - A Chrome window opens on Ozoon, and the dashboard opens at <http://127.0.0.1:8765>.
    - The bot logs in by itself. If a captcha, 2FA code or device check appears, it pauses betting and alerts you: finish the login in the Chrome window and it carries on.
@@ -108,6 +109,11 @@ The dashboard also has endpoints to fix matching without editing files:
 - **A league:** add its feed URL under `feeds:`. If the book names it differently, add it to `league_names` in `betbot/books/bodog_markets.yaml`, or set `books.OZ.leagues`.
 - **Team spellings:** add to `betbot/matching/aliases/<LEAGUE>.yaml`. A league with no file still works through fuzzy matching.
 - **Bet types or periods** (e.g. `1H ATS`): add them to `bettypes` / `periods` in `bodog_markets.yaml`. Unknown types are skipped and shown on the dashboard.
+- **MyBookie (`MyB`)** is enabled in `config.example.yaml`. A PC set up before it was added needs the `MyB` block copied from there into its own `config.yaml` (the key must be `MyB`, as the feed spells it).
+  - NFL and NHL leagues are built in. For another league, open it once in capture mode: the summary shows `"leagueId": "…"` in its `leagues-lines` request. Add it to `league_ids` in `betbot/books/mybookie_markets.yaml`, or set `books.MyB.leagues: {MLB: "1234"}`.
+  - Only full-game spreads, moneylines and totals are bet. Halves and quarters are separate MyBookie leagues.
+  - One-click bets go through the API for now (`one_click_mode: api`): clicking MyBookie's bet slip isn't set up yet.
+  - The spread bet format is checked against a real captured bet. Moneyline and total bets use the same format, but haven't been seen in a capture yet; check the first one of each in "My Bets".
 - **Bovada (`BV`):** copy the `OZ` block under `books:` as `BV` with `base_url: https://www.bovada.lv`. It's the same platform.
 - **A different platform:** add `betbot/books/<name>.py` with a `BookAdapter` subclass decorated with `@register("<name>")`. It needs `resolve_league`, `events`, `quote`, `place_api` and `place_ui`; the matcher, engine and dashboard are shared.
 
@@ -117,8 +123,8 @@ The dashboard also has endpoints to fix matching without editing files:
 python -m betbot run                 # normal operation
 python -m betbot run --no-browser    # read-only: match and quote rows, never bets
 python -m betbot check               # one pass: how every feed row matches at each enabled book
-python -m betbot set-credentials OZ
-python -m betbot capture OZ
+python -m betbot set-credentials OZ    # or MyB
+python -m betbot capture OZ           # or MyB
 python -m pytest                     # tests (pip install -e .[dev])
 ```
 

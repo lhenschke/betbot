@@ -87,7 +87,7 @@ def register(name: str) -> Callable[[type[BookAdapter]], type[BookAdapter]]:
 
 
 def adapter_class(name: str) -> type[BookAdapter]:
-    from . import bodog  # noqa: F401  (registers built-in adapters)
+    from . import bodog, mybookie  # noqa: F401  (registers built-in adapters)
     if name not in _REGISTRY:
         raise KeyError(f"unknown book adapter '{name}'; known: {sorted(_REGISTRY)}")
     return _REGISTRY[name]
