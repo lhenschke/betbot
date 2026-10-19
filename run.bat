@@ -4,9 +4,15 @@ cd /d "%~dp0"
 
 if not exist .venv (
   echo Setting up Python environment...
-  py -3.12 -m venv .venv 2>/dev/null || python -m venv .venv
+  python -m venv .venv || py -m venv .venv
   .venv\Scripts\python -m pip install --upgrade pip
-  .venv\Scripts\pip install -e .
+)
+rem Installs anything new or missing (quick when nothing changed).
+.venv\Scripts\python -m pip install -q -e .
+if errorlevel 1 (
+  echo Installing packages failed - see the messages above.
+  pause
+  exit /b
 )
 if not exist config.yaml (
   copy config.example.yaml config.yaml >nul

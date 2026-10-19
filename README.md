@@ -47,7 +47,7 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
 
 ## Setup on each Windows PC
 
-1. Install **Python 3.12** (python.org; tick "Add to PATH") and **Google Chrome**.
+1. Install **Python 3.12 or newer** (python.org, tick "Add to PATH"; the Microsoft Store version also works) and **Google Chrome**.
 2. Copy or clone this folder to the PC.
 3. Double-click **`run.bat`**. The first time, it installs everything, creates `config.yaml` and opens it.
    - Set `books.OZ.account` to a label for this PC's account, e.g. `lee-desktop`.

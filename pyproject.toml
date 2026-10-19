@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn>=0.29",
     "keyring>=25.0",
     "playwright>=1.44",
+    "tzdata>=2024.1",  # Windows has no system time-zone database
 ]
 
 [project.optional-dependencies]
