@@ -44,8 +44,8 @@ DEFAULT_SELECTORS = {
     "outcome": '[data-testid="outcome-container-{outcome_id}"]',
     "betslip": '[data-testid="betslip-container"]',
     "single_card": '[data-testid="betslip-collapsible-{outcome_id}"]',
-    "stake_input": '[data-testid="betslip-collapsible-{outcome_id}"] input',
-    "place_button": '[data-testid="betslip-container"] button:has-text("Place")',
+    "stake_input": '[data-testid="betslip-container"] .ol-text__externalContainer:has-text("Stake") input',
+    "place_button": '[data-testid="betslip-container"] button:has-text("Place Bet")',
     "confirmation": '[data-testid="bet-slip-single-tab-confirmation-bet"]',
     "clear_all": '[data-testid="clear-all-button"]',
 }
@@ -147,33 +147,45 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
     return None, f"no {rule['market_key']} {period} market"
 
 
+def suggestion_price(suggestion: dict[str, Any] | None, outcome_id: str) -> float | None:
+    """The price the bet slip would actually take, from the site's own bet-slip check."""
+    for sel in ((suggestion or {}).get("selections") or {}).get("selection", []):
+        if str(sel.get("outcomeId")) == outcome_id:
+            return _f(sel.get("price"))
+    return None
+
+
 def build_bet_payload(sel: Selection, stake: float, suggestion: dict[str, Any] | None = None,
-                      odds_format: str = "AMERICAN", line_group: int | None = None) -> dict[str, Any]:
-    """Single-bet payload in the shape the site's bet slip submits."""
+                      odds_format: str = "AMERICAN", for_max_stake: bool = False) -> dict[str, Any]:
+    """Single-bet payload exactly as the site's bet slip sends it (checked against a captured bet).
+
+    priceId and lineGroup come from the bet-slip check (GET .../betslip?outcomeId=...) when there is
+    one. The max-stake request is the same payload with no stake and specifyingRisk false.
+    """
     price_id, version = sel.price_id, None
-    if suggestion:
-        for s in (suggestion.get("selections") or {}).get("selection", []):
-            if str(s.get("outcomeId")) == sel.outcome_id:
-                price_id = str(s.get("priceId") or price_id)
-                version = s.get("version")
-    cents = int(round(stake * 100))
+    for s in ((suggestion or {}).get("selections") or {}).get("selection", []):
+        if str(s.get("outcomeId")) == sel.outcome_id:
+            price_id = str(s.get("priceId") or price_id)
+            version = s.get("version")
+    cents = 0 if for_max_stake else int(round(stake * 100))
     payload: dict[str, Any] = {
         "channel": "WEB_BS",
         "device": "DESKTOP",
+        "bets": {"bet": [{
+            "betGroups": {"groupId": [0]}, "betType": "SINGLE", "isBox": False,
+            "oddsFormat": odds_format, "specifyingRisk": not for_max_stake, "stakePerLine": cents,
+            "potentialWin": int(round(cents * (sel.decimal - 1.0))),
+        }]},
+        "groups": {"group": [{
+            "id": 0, "type": "STRAIGHT",
+            "groupSelections": [{"groupSelection": [{"selectionId": 0, "order": 0, "isBanker": False}]}],
+        }]},
         "selections": {"selection": [{
             "outcomeId": sel.outcome_id, "id": 0, "system": "A", "priceId": price_id,
             "oddsFormat": odds_format, **({"version": version} if version is not None else {}),
         }]},
-        "groups": {"group": [{
-            "id": 0, "type": "STRAIGHT",
-            "groupSelections": [{"groupSelection": [{"selectionId": 0, "order": 0}]}],
-        }]},
-        "bets": {"bet": [{
-            "betGroups": {"groupId": [0]}, "betType": "SINGLE", "isBox": False,
-            "oddsFormat": odds_format, "specifyingRisk": True, "stakePerLine": cents,
-            "potentialWin": int(round(cents * (sel.decimal - 1.0))),
-        }]},
     }
+    line_group = (suggestion or {}).get("lineGroup")
     if line_group is not None:
         payload["lineGroup"] = line_group
     return payload
@@ -316,28 +328,27 @@ class BodogAdapter(BookAdapter):
         sid = await self.browser.session_id() if self.browser else None
         if not sid:
             raise PermissionError("not logged in")
-        return {"X-Session-Id": f"Bearer {sid}", "Content-Type": "application/json",
-                "Accept": "application/json"}
+        # the site sends the session in both headers on every bet-slip call
+        return {"Authorization": f"Bearer {sid}", "X-Session-Id": f"Bearer {sid}",
+                "Content-Type": "application/json", "Accept": "application/json, text/plain, */*"}
 
     async def suggestion(self, sel: Selection, headers: dict[str, str]) -> dict[str, Any] | None:
         status, data = await self.transport.request(
-            "GET", f"{SVC}/bet/betslip?outcomeId=A:{sel.outcome_id}:1",
-            headers={"Authorization": headers["X-Session-Id"], "X-Session-Id": headers["X-Session-Id"]})
+            "GET", f"{SVC}/bet/betslip?outcomeId=A:{sel.outcome_id}:1", headers=headers)
         if status >= 400 or not isinstance(data, dict):
             return None
         return data
 
-    async def max_stake(self, sel: Selection, payload: dict[str, Any], headers: dict[str, str]) -> float | None:
-        status, data = await self.transport.request("POST", f"{SVC}/bet/betslip/maxStake",
-                                                    body=payload, headers=headers)
+    async def max_stake(self, sel: Selection, suggestion: dict[str, Any] | None,
+                        headers: dict[str, str]) -> float | None:
+        """Largest stake the book will take, in account currency (the reply is {"maxStake": 1056.0})."""
+        status, data = await self.transport.request(
+            "POST", f"{SVC}/bet/betslip/maxStake", body=build_bet_payload(sel, 0, suggestion, for_max_stake=True),
+            headers=headers)
         if status >= 400 or not isinstance(data, dict):
             return None
-        for b in (data.get("bets") or {}).get("bet", []):
-            v = b.get("maxStake") or b.get("stakePerLine")
-            if v:
-                return float(v) / 100.0
-        v = data.get("maxStake")
-        return float(v) / 100.0 if v else None
+        v = _f(data.get("maxStake"))
+        return v if v and v > 0 else None
 
     async def place_api(self, sel: Selection, stake: float, dry_run: bool) -> BetResult:
         t0 = time.monotonic()
@@ -353,11 +364,14 @@ class BodogAdapter(BookAdapter):
         if sug is not None and sug.get("status") not in (None, "AVAILABLE"):
             return BetResult(BetStatus.REJECTED, stake, sel.decimal, reason=f"bet slip says {sug.get('status')}",
                              timings=timings, raw=sug)
-        payload = build_bet_payload(sel, stake, sug)
-        mx = await self.max_stake(sel, payload, headers)
+        sug_price = suggestion_price(sug, sel.outcome_id)
+        if sug_price is not None and sug_price < sel.decimal - 1e-6:
+            return BetResult(BetStatus.REJECTED, stake, sel.decimal, retryable=True, timings=timings, raw=sug,
+                             reason=f"PriceChange: bet slip offers {sug_price:g}, quoted {sel.decimal:g}")
+        mx = await self.max_stake(sel, sug, headers)
         if mx is not None and stake > mx:
-            stake = mx
-            payload = build_bet_payload(sel, stake, sug)
+            stake = float(int(mx))
+        payload = build_bet_payload(sel, stake, sug)
         timings["maxstake_ms"] = (time.monotonic() - t0) * 1000
         if dry_run:
             return BetResult(BetStatus.DRY_RUN, stake, sel.decimal, reason=f"max stake {mx}",
@@ -379,8 +393,9 @@ class BodogAdapter(BookAdapter):
         deadline = time.monotonic() + timeout_s
         while state == "PENDING" and key and time.monotonic() < deadline:
             await asyncio.sleep(0.8)
-            _, resp = await self.transport.request("GET", f"{SVC}/bet/betslip/{key}",
-                                                   headers={"X-Session-Id": headers["X-Session-Id"]})
+            _, resp = await self.transport.request(
+                "GET", f"{SVC}/bet/betslip/{key}",
+                headers={k: v for k, v in headers.items() if k != "X-Idempotency-Key"})
             state, ref, reason, retry = interpret_result(resp)
         timings["final_ms"] = (time.monotonic() - t0) * 1000
         if state == "SUCCESS":

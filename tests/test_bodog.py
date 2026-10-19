@@ -1,7 +1,10 @@
+import json
+
 import pytest
 
 from betbot.books.bodog import (BodogAdapter, build_bet_payload, find_selection, interpret_result, parse_bettype,
-                                parse_events)
+                                parse_events, suggestion_price)
+from betbot.models import BookEvent, Selection
 from betbot.feed import parse_row
 from betbot.matching.matcher import match_row
 from tests.conftest import feed_row, load
@@ -108,6 +111,90 @@ def test_bet_payload_shape():
     b = p["bets"]["bet"][0]
     assert b["stakePerLine"] == 2500 and b["betType"] == "SINGLE" and b["specifyingRisk"] is True
     assert p["groups"]["group"][0]["type"] == "STRAIGHT" and p["channel"] == "WEB_BS"
+
+
+def captured_selection():
+    ev = BookEvent("OZ", "29514566", "Washington Commanders @ San Francisco 49ers", 0, [], False, "/x", "/nfl")
+    return Selection("OZ", ev, "518431451", "Game Lines / Point Spread", "G", "2376622109",
+                     "Washington Commanders", "40264870027", 1.909091, "-110", 7.0, True)
+
+
+def test_payloads_match_a_real_captured_bet():
+    cap = load("oz_capture_bet.json")
+    sel = captured_selection()
+    assert build_bet_payload(sel, 2.0, cap["suggestion"]) == cap["place_request"]
+    assert build_bet_payload(sel, 0, cap["suggestion"], for_max_stake=True) == cap["max_stake_request"]
+    assert suggestion_price(cap["suggestion"], sel.outcome_id) == pytest.approx(1.909091)
+
+
+def test_captured_bet_responses():
+    cap = load("oz_capture_bet.json")
+    assert interpret_result(cap["place_response"])[0] == "PENDING"
+    assert interpret_result(cap["status_response"])[:2] == ("SUCCESS", "26107603167872")
+
+
+class FakeBrowser:
+    async def session_id(self):
+        return "SID"
+
+    async def show_event(self, *a, **kw):
+        pass
+
+
+class CaptureTransport:
+    """Replays the captured bet: records every call the adapter makes."""
+
+    def __init__(self, cap):
+        self.cap, self.calls = cap, []
+
+    async def request(self, method, path, *, body=None, headers=None):
+        self.calls.append((method, path, body, headers))
+        if path.endswith("/betslip/maxStake"):
+            return 200, self.cap["max_stake_response"]
+        if "betslip?outcomeId=" in path:
+            return 200, self.cap["suggestion"]
+        if method == "POST" and path.endswith("/bet/betslip"):
+            return 200, self.cap["place_response"]
+        return 200, self.cap["status_response"]
+
+
+async def test_place_api_replays_the_sites_call_sequence():
+    from betbot.config import BookConfig
+    cap = load("oz_capture_bet.json")
+    t = CaptureTransport(cap)
+    adapter = BodogAdapter("OZ", BookConfig(base_url="https://www.ozoon.eu"), t, None, FakeBrowser())
+    res = await adapter.place_api(captured_selection(), 2.0, dry_run=False)
+    assert res.status.value == "accepted" and res.reference == "26107603167872" and res.stake == 2.0
+    methods = [(m, p.split("?")[0].rsplit("/", 2)[-2:]) for m, p, _, _ in t.calls]
+    assert [m for m, _ in methods] == ["GET", "POST", "POST", "GET"]
+    assert t.calls[0][1].endswith("/bet/betslip?outcomeId=A:2376622109:1")
+    assert t.calls[1][2] == cap["max_stake_request"]
+    assert t.calls[2][2] == cap["place_request"]
+    assert t.calls[3][1].endswith("/bet/betslip/bae235ca-822a-3221-a857-2dd5ece6ab8d")
+    for _, _, _, h in t.calls:
+        assert h["Authorization"] == h["X-Session-Id"] == "Bearer SID"
+    assert "X-Idempotency-Key" in t.calls[2][3]
+
+
+async def test_max_stake_caps_in_dollars():
+    from betbot.config import BookConfig
+    cap = load("oz_capture_bet.json")
+    t = CaptureTransport({**cap, "max_stake_response": {"maxStake": 37.5}})
+    adapter = BodogAdapter("OZ", BookConfig(base_url="https://www.ozoon.eu"), t, None, FakeBrowser())
+    res = await adapter.place_api(captured_selection(), 100.0, dry_run=True)
+    assert res.stake == 37.0
+    assert len(t.calls) == 2  # dry run stops before placing
+
+
+async def test_lower_bet_slip_price_is_not_placed():
+    from betbot.config import BookConfig
+    cap = load("oz_capture_bet.json")
+    sug = json.loads(json.dumps(cap["suggestion"]))
+    sug["selections"]["selection"][0]["price"] = "1.80"
+    t = CaptureTransport({**cap, "suggestion": sug})
+    adapter = BodogAdapter("OZ", BookConfig(base_url="https://www.ozoon.eu"), t, None, FakeBrowser())
+    res = await adapter.place_api(captured_selection(), 2.0, dry_run=False)
+    assert res.status.value == "rejected" and res.retryable and len(t.calls) == 1
 
 
 def test_interpret_result():

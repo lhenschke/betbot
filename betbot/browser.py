@@ -142,7 +142,9 @@ class BrowserSession:
     # ----- the site's API, from inside the page -----------------------------
     async def request(self, method: str, path: str, *, body: Any = None,
                       headers: dict[str, str] | None = None) -> tuple[int, Any]:
-        url = path if path.startswith("http") else self.base_url + path
+        # Relative paths go to whichever host the page is on: the site serves its betting API
+        # from the same origin as the page (e.g. services.ozoon.eu), not necessarily base_url.
+        url = path
         try:
             status, data = await self.api_page.evaluate(FETCH_JS, [method, url, body, headers or {}])
         except Exception as e:  # tab reloaded mid-call, etc.

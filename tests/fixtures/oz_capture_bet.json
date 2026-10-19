@@ -1,0 +1,12 @@
+{
+  "_note": "From a real $2 bet placed by hand in capture mode (Washington Commanders +7 -110). Session headers were redacted at capture.",
+  "suggestion": {"selections": {"selection": [{"outcomeId": "2376622109", "marketId": "518431451", "priceId": "40264870027", "system": "ABP", "price": "1.909091", "points": 7.0, "id": 0}]},
+                 "groups": {"group": [{"type": "STRAIGHT", "groupSelections": [{"groupSelection": [{"selectionId": 0, "order": 0, "isBanker": false}]}], "id": 0}]},
+                 "bets": {"bet": [{"betType": "SINGLE", "betGroups": {"groupId": [0]}, "stakePerLine": 0, "price": "1.909091", "isBox": false, "minTotalStake": 50, "id": 0}]},
+                 "totalStake": 0, "lineGroup": 2, "betDelay": 0.0, "status": "AVAILABLE", "language": "en", "written": 0},
+  "max_stake_request": {"channel":"WEB_BS","device":"DESKTOP","bets":{"bet":[{"betGroups":{"groupId":[0]},"betType":"SINGLE","isBox":false,"oddsFormat":"AMERICAN","specifyingRisk":false,"stakePerLine":0,"potentialWin":0}]},"groups":{"group":[{"id":0,"type":"STRAIGHT","groupSelections":[{"groupSelection":[{"selectionId":0,"order":0,"isBanker":false}]}]}]},"lineGroup":2,"selections":{"selection":[{"outcomeId":"2376622109","id":0,"system":"A","priceId":"40264870027","oddsFormat":"AMERICAN"}]}},
+  "max_stake_response": {"maxStake": 1056.0},
+  "place_request": {"channel":"WEB_BS","device":"DESKTOP","bets":{"bet":[{"betGroups":{"groupId":[0]},"betType":"SINGLE","isBox":false,"oddsFormat":"AMERICAN","specifyingRisk":true,"stakePerLine":200,"potentialWin":182}]},"groups":{"group":[{"id":0,"type":"STRAIGHT","groupSelections":[{"groupSelection":[{"selectionId":0,"order":0,"isBanker":false}]}]}]},"lineGroup":2,"selections":{"selection":[{"outcomeId":"2376622109","id":0,"system":"A","priceId":"40264870027","oddsFormat":"AMERICAN"}]}},
+  "place_response": {"channel": "WEB_BS", "bets": {"bet": [{"betType": "SINGLE", "stakePerLine": 200, "potentialWin": 182, "key": "589a444d-eca4-373c-aff5-919ea9dd3053", "response": {"status": "PLACING"}}]}, "lineGroup": 2, "betDelay": 0.0, "key": "bae235ca-822a-3221-a857-2dd5ece6ab8d", "status": "PLACING"},
+  "status_response": {"bets": {"bet": [{"betType": "SINGLE", "stakePerLine": 200, "totalStake": 200, "price": "1.91", "priceFormatted": "-110", "potentialWin": 182, "key": "589a444d-eca4-373c-aff5-919ea9dd3053", "betRef": "26107603167872", "response": {"status": "SUCCESS", "system": "A"}}]}, "lineGroup": 2, "betDelay": 0.0, "key": "bae235ca-822a-3221-a857-2dd5ece6ab8d", "status": "SUCCESS"}
+}
