@@ -60,7 +60,7 @@
   </section>
   <section>
     <h2>Feed rows (enabled books)</h2>
-    <table><thead><tr><th>Arb</th><th>Now</th><th>Book</th><th>League</th><th>Bet</th><th>Feed price</th><th>Book selection</th><th>Category</th><th>State</th><th>Why</th></tr></thead>
+    <table><thead><tr><th>Arb</th><th>Now</th><th>Book</th><th>League</th><th>Bet</th><th>Feed price</th><th>Book selection</th><th>Category</th><th>State</th><th>Why</th><th></th></tr></thead>
     <tbody id="rows"></tbody></table>
   </section>
   <section>
@@ -142,7 +142,8 @@ function render() {
   $("rows").innerHTML = state.rows.map(r => `<tr>
     ${arbCell(r.arbsize)}${arbCell(r.live_arbsize)}<td>${esc(r.book)}</td><td>${esc(r.league)}</td><td>${betText(r)}</td>
     <td class="num">${dec2am(r.sqline)} / ${dec2am(r.pinnline)}</td><td>${esc(r.selection || r.event || "")}</td>
-    <td>${esc(r.category)}</td><td>${esc(r.state)}</td><td class="muted">${esc(r.reason)}</td></tr>`).join("");
+    <td>${esc(r.category)}</td><td>${esc(r.state)}</td><td class="muted">${esc(r.reason)}</td>
+    <td>${placeable(r) ? `<button onclick="placeIgnored('${esc(r.id)}')" title="Below the arb threshold: place it anyway (re-quoted first)">Place</button>` : ""}</td></tr>`).join("");
   $("bets").innerHTML = state.bets.map(b => { const t = JSON.parse(b.timings || "{}"); return `<tr>
     <td>${new Date(b.ts * 1000).toLocaleTimeString()}</td><td>${esc(b.book)}</td><td>${esc(b.description)}</td>
     <td class="num">${b.stake}</td><td class="num">${dec2am(b.decimal)}</td><td class="num">${b.arbsize == null ? "" : b.arbsize.toFixed(1)}</td>
@@ -151,6 +152,15 @@ function render() {
 }
 async function updateNow() { const r = await post("/api/update"); notify(r.reason || "checking…"); load(); }
 async function load() { state = await (await fetch("/api/state")).json(); render(); }
+// Rows below the borderline threshold never reach the queue, but a matched one can still be placed by hand.
+const placeable = (r) => r.category === "ignored" && r.event && !["placing", "placed", "gone"].includes(r.state);
+function placeIgnored(id) {
+  const r = state.rows.find(x => x.id === id);
+  if (!r || !confirm(`Place ${r.sq_team} ${r.bettype} ${r.line ?? ""} at ${r.book}?\n${r.event}\n` +
+                     `Feed arb ${r.arbsize}: it's re-quoted first and placed only if the price hasn't dropped further ` +
+                     `(beyond your one-click tolerance).`)) return;
+  place(id);
+}
 async function place(id, mode) {
   const r = await post("/api/place", {row_id: id, mode});
   notify(`${r.status}: ${r.reason || r.reference || ""}`, r.status === "accepted" || r.status === "dry_run" ? "" : "alert");

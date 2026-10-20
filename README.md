@@ -98,6 +98,7 @@ Steps 1 and 2 confirm two things this code couldn't test directly: the bet reque
   - **Place** (humanlike clicking), **Fast** (API) and **Dismiss** buttons;
   - a sound and a desktop notification when a new one arrives.
 - **Feed rows:** every row for enabled books, with its category, state, and why it was skipped, unmatched or not mapped.
+  - A matched row that's ignored for being below the borderline threshold has a **Place** button. After you confirm, it's re-quoted and placed like a one-click bet, only if the price hasn't dropped further than your `one_click_tolerance`. It never goes into the queue.
 - **Recent bets:** stake, price, arbsize at the time of the bet, mode, result, and time from start to accepted.
 
 The dashboard also has endpoints to fix matching without editing files:

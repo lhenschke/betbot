@@ -165,3 +165,16 @@ async def test_mouse_betting_is_the_default_and_never_falls_back_to_the_api(setu
     await feed(eng, poller, arbsize=2)
     v = next(iter(eng.views.values()))
     assert calls == ["ui"] and v.state == "skipped" and v.reason == "mouse betting: odds button not found"
+
+
+async def test_ignored_row_can_be_placed_by_hand(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    await feed(eng, poller, arbsize=-6)  # below borderline_min: matched, but neither bet nor queued
+    v = next(iter(eng.views.values()))
+    assert v.category == "ignored" and v.state == "matched" and adapter.placed == []
+    res = await eng.one_click(v.row.id)  # the price now (2.5 vs 1.649 -> -4) is still >= -6 - tolerance
+    assert res.status.value == "dry_run" and len(adapter.placed) == 1
+    adapter.decimal = 2.2  # +120 vs -154 -> -34: worse than what was shown, so not placed
+    await feed(eng, poller, arbsize=-7, sqline=2.4, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-6.5", spread=-6.5)
+    res = await eng.one_click("221026-1715_OZ_NFL_NWE_CHI_ATS_-6.5")
+    assert res.status.value == "rejected" and "value gone" in res.reason and len(adapter.placed) == 1
