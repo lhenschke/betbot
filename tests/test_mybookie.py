@@ -228,3 +228,13 @@ def test_ncaaf_and_mlb_feed_rows_match():
     assert m.ok and m.team.name == "Tampa Bay Rays"
     sel, why = find_selection(m.event, m.event.raw, row, m.team)
     assert sel and sel.label == "Tampa Bay Rays -1.5" and sel.american == "+140"
+
+
+def test_live_row_is_not_priced_from_a_pregame_listing():
+    ev = next(e for e in nfl_events() if e.id == "29912810")  # not live in the capture
+    sel, why = find_selection(ev, ev.raw, myb_row(league="NFL LIVE", livetime="Q1 08:00", spread=7.5),
+                              ev.competitors[0])
+    assert sel is None and why == "the book lists this game as not live yet"
+    live = parse_events(load("myb_lines_nhl_live.json")["response"], "MyB", "4345")[0]
+    sel, why = find_selection(live, live.raw, myb_row(league="NHL", bettype="ML", spread="None"), live.competitors[0])
+    assert sel is None and why == "the book lists this game as live"

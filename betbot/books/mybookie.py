@@ -166,6 +166,8 @@ def find_selection(event: BookEvent, game: dict[str, Any], row: ArbRow, team: Co
         return None, f"row has no {rule['line']} value"
     if rule["pick"] == "team" and team is None:
         return None, "no matched team for a team bet"
+    if bool(game.get("isLive")) != row.is_live:  # never price a live row with pre-game odds, or the reverse
+        return None, "the book lists this game as " + ("live" if game.get("isLive") else "not live yet")
     m = (game.get("gameMarketTypes") or {}).get(rule["market"])
     if not m:
         return None, f"no {rule['market']} market"

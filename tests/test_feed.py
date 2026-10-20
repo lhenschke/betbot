@@ -53,3 +53,20 @@ def test_diff_added_changed_removed():
     assert [r.id for r in upd.changed] == [a.id]
     assert [r.id for r in upd.removed] == [b.id]
     assert p.get(a.id).sqline == 2.6
+
+
+def test_real_live_rows():
+    rows = [parse_row(d) for d in [
+        {"arbsize": 11, "bettype": "Over", "book": "N1B", "book_depth": "None", "book_limit": 3000,
+         "date": "2026-10-20 00:36:59", "id": "191026-1600_N1B_NHL LIVE_ANA_NYR_Over_6.5", "league": "NHL LIVE",
+         "line3": "None", "livetime": "ANA 0-4 NYR | 3:10 - 2nd", "market": "None", "pinn_team": "ANA",
+         "pinnline": 1.746, "spread": "None", "sq_team": "New York Rangers", "sqline": 2.45,
+         "start_date": 1792450800000, "status": "up", "total": 6.5, "url": "https://n1bet.com"},
+        {"arbsize": -5, "bettype": "Under", "book": "SI", "book_depth": "None", "book_limit": 1900,
+         "date": "2026-10-20 00:32:12", "id": "201026-1600_SI_NHL_LAK_WSH_Under_6", "league": "NHL",
+         "line3": "None", "livetime": "None", "market": "None", "pinn_team": "LAK", "pinnline": 2.05,
+         "spread": "None", "sq_team": "Washington Capitals", "sqline": 1.91, "start_date": 1792537200000,
+         "status": "up", "total": 6, "url": "https://www.sportsinteraction.com"}]]
+    live, pre = rows
+    assert (live.league, live.is_live, live.away_abbr, live.home_abbr, live.total) == ("NHL", True, "ANA", "NYR", 6.5)
+    assert (pre.league, pre.is_live, pre.away_abbr, pre.home_abbr) == ("NHL", False, "LAK", "WSH")
