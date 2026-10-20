@@ -117,8 +117,6 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
                 continue
             if (m.get("period") or {}).get("abbreviation") != period:
                 continue
-            if bool((m.get("period") or {}).get("live")) != row.is_live:
-                continue  # a live row is priced against live markets only, a pre-game row against pre-game ones
             desc = m.get("description", "")
             if rule["pick"] in ("over", "under"):
                 nd = normalize(desc)
@@ -155,7 +153,7 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
         return min(found, key=lambda s: abs(cents(s.decimal) - target)), "ok"
     if seen_lines:
         return None, f"line {want_line:g} not offered (book has {', '.join(sorted(set(seen_lines)))})"
-    return None, f"no {'live ' if row.is_live else ''}{rule['market_key']} {period} market"
+    return None, f"no {rule['market_key']} {period} market"
 
 
 def suggestion_price(suggestion: dict[str, Any] | None, outcome_id: str) -> float | None:

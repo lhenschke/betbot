@@ -227,23 +227,12 @@ def test_same_line_twice_takes_the_price_closest_to_the_feed():
     assert sel.market_description == "Live Lines / Point Spread - Rest of Game"
 
 
-def test_live_rows_use_live_markets_only():
-    # Ozoon keeps a game's pre-game markets after it goes live; a live row must not be priced from them
-    import copy
+def test_live_row_matches_the_full_game_line_regardless_of_the_live_flag():
+    # Ozoon may tag a live game's full-game market either way; a live row must still find the line it has.
     ev, js, row, team = event_and_row(spread=-3)
-    js = copy.deepcopy(js)
-    pre = next(m for dg in js["displayGroups"] for m in dg["markets"] if m["description"] == "Point Spread"
-               and m["period"]["abbreviation"] == "G")
     live_row = parse_row(feed_row(spread=-3, league="NFL LIVE", livetime="Q2 05:00"))
     sel, why = find_selection(ev, js, live_row, team)
-    assert sel is None and why == "no live 2W-HCAP G market"
-    live = copy.deepcopy(pre)
-    live["id"], live["period"] = "777", {**pre["period"], "description": "Live Game", "live": True}
-    for o in live["outcomes"]:
-        o["id"], o["price"] = o["id"] + "7", {**o["price"], "id": "p7", "american": "+120", "decimal": "2.2"}
-    js["displayGroups"].insert(0, {"description": "Game Lines", "markets": [live]})
-    assert find_selection(ev, js, live_row, team)[0].market_id == "777"
-    assert find_selection(ev, js, row, team)[0].market_id == pre["id"]  # pre-game row: pre-game market
+    assert sel is not None and sel.handicap == -3 and sel.market_description == "Game Lines / Point Spread", why
 
 
 def test_accepted_price_reads_what_the_book_took():

@@ -230,14 +230,12 @@ def test_ncaaf_and_mlb_feed_rows_match():
     assert sel and sel.label == "Tampa Bay Rays -1.5" and sel.american == "+140"
 
 
-def test_live_row_is_not_priced_from_a_pregame_listing():
-    ev = next(e for e in nfl_events() if e.id == "29912810")  # not live in the capture
+def test_live_row_finds_the_line_even_if_the_listing_flag_differs():
+    # the feed is trusted for whether it's live; the book page is read only to find the line it lists
+    ev = next(e for e in nfl_events() if e.id == "29912810")  # flagged not-live in the capture
     sel, why = find_selection(ev, ev.raw, myb_row(league="NFL LIVE", livetime="Q1 08:00", spread=7.5),
                               ev.competitors[0])
-    assert sel is None and why == "the book lists this game as not live yet"
-    live = parse_events(load("myb_lines_nhl_live.json")["response"], "MyB", "4345")[0]
-    sel, why = find_selection(live, live.raw, myb_row(league="NHL", bettype="ML", spread="None"), live.competitors[0])
-    assert sel is None and why == "the book lists this game as live"
+    assert sel is not None and sel.label == "Washington Commanders +7.5", why
 
 
 def test_accepted_price_reads_what_mybookie_took():
