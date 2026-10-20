@@ -19,11 +19,15 @@ from .feed import FeedPoller, FeedUpdate
 from .ledger import Ledger
 from .matching.matcher import match_row
 from .models import ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
-from .odds import arbsize_cents
+from .odds import arbsize_cents, cents, decimal_to_american
 
 log = logging.getLogger(__name__)
 
 AUTO, BORDERLINE, IGNORED = "auto", "borderline", "ignored"
+
+
+def _am(dec: float) -> str:
+    return f"{decimal_to_american(dec):+.0f}"
 
 
 @dataclass
@@ -192,8 +196,20 @@ class Engine:
             return None
         latest = self.poller.get(v.row.id) or v.row
         v.live_arbsize = arbsize_cents(sel.decimal, latest.pinnline)
-        v.reason = "" if sel.is_open else "market closed or suspended"
+        v.reason = (self.price_gap(latest, sel) or "") if sel.is_open else "market closed or suspended"
         return sel
+
+    def price_gap(self, row: ArbRow, sel: Selection) -> str | None:
+        """Why not to trust a quote whose price is far from the one the feed saw for the same bet: the
+        bot found a different market (e.g. a live "rest of game" line), or one side is stale."""
+        limit = self.cfg.thresholds.max_price_gap
+        if not limit or row.sqline <= 1.0 or sel.decimal <= 1.0:
+            return None
+        gap = abs(cents(sel.decimal) - cents(row.sqline))
+        if gap <= limit:
+            return None
+        return (f"book price {sel.american} is {gap:.0f} cents from the feed's {_am(row.sqline)}: "
+                f"probably a different market or a stale price; not betting")
 
     # ----- the bet ------------------------------------------------------------
     def in_active_hours(self) -> bool:
@@ -256,7 +272,8 @@ class Engine:
         if latest is None:
             return self._skip(v, "row no longer in the feed")
         age_limit = th.max_live_age_s if latest.is_live else th.max_prematch_age_s
-        if age_limit and latest.updated_at and time.time() - latest.updated_at > age_limit:
+        # Only automatic bets wait for a fresh feed row; a bet you click is re-quoted at the book and placed.
+        if auto and age_limit and latest.updated_at and time.time() - latest.updated_at > age_limit:
             return self._skip(v, f"feed row is {time.time() - latest.updated_at:.0f}s old")
         if block := self.pacing_block(book):
             if auto:
@@ -280,6 +297,8 @@ class Engine:
                     return self._skip(v, v.reason or "selection not found")
                 if not sel.is_open:
                     return self._skip(v, "market closed or suspended")
+                if gap := self.price_gap(latest, sel):
+                    return self._skip(v, gap)
                 if v.live_arbsize is None or v.live_arbsize < min_arbsize - 1e-9:
                     return self._skip(v, f"value gone: arbsize now {v.live_arbsize:.1f} < {min_arbsize:g}")
                 acct = self.account(book)

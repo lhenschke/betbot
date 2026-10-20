@@ -230,3 +230,26 @@ async def test_a_limit_that_cuts_the_stake_is_rounded_but_not_to_nothing(setup):
     assert [stake for _, stake, _ in adapter.placed] == [35, 5]
     v = eng.views["221026-1715_OZ_NFL_NWE_CHI_ATS_-6"]  # 4.5 stays 4.5, which is under min_stake 5
     assert v.reason == "book limit leaves only 4.5, below min_stake 5"
+
+
+async def test_book_price_far_from_the_feed_is_never_bet(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    adapter.decimal = 6.0  # +500, where the feed saw +210: another market or a stale price
+    await feed(eng, poller, arbsize=2, sqline=3.1)
+    v = next(iter(eng.views.values()))
+    assert adapter.placed == [] and v.reason.startswith("book price +150 is 290 cents from the feed's +210")
+    res = await eng.one_click(v.row.id)  # not by hand either
+    assert res.status.value == "rejected" and adapter.placed == []
+    cfg.thresholds.max_price_gap = 0  # switched off
+    res = await eng.one_click(v.row.id)
+    assert res.status.value == "dry_run"
+
+
+async def test_feed_age_only_holds_back_automatic_bets(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    adapter.decimal = 2.7
+    await feed(eng, poller, arbsize=2, livetime="Q2 05:00", date="2026-01-01 00:00:00")  # hours old
+    v = next(iter(eng.views.values()))
+    assert adapter.placed == [] and "old" in v.reason
+    res = await eng.one_click(v.row.id)
+    assert res.status.value == "dry_run" and len(adapter.placed) == 1

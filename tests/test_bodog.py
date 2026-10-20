@@ -206,3 +206,22 @@ def test_interpret_result():
     assert state == "FAIL" and retry and "PriceChange" in reason
     hard = {"status": "FAIL", "error": [{"code": "betRejectedMessage_MaxRisk"}]}
     assert interpret_result(hard)[3] is False
+
+
+def test_same_line_twice_takes_the_price_closest_to_the_feed():
+    # e.g. a live "rest of game" market offering the same team and line at a very different price
+    import copy
+    ev, js, row, team = event_and_row(spread=-3)
+    js = copy.deepcopy(js)
+    main = next(m for dg in js["displayGroups"] for m in dg["markets"] if m["description"] == "Point Spread"
+                and m["period"]["abbreviation"] == "G")
+    other = copy.deepcopy(main)
+    other["id"], other["description"] = "999", "Point Spread - Rest of Game"
+    for o in other["outcomes"]:
+        o["id"], o["price"] = o["id"] + "9", {**o["price"], "id": "p9", "american": "+500", "decimal": "6.0"}
+    js["displayGroups"].insert(0, {"description": "Live Lines", "markets": [other]})
+    sel, _ = find_selection(ev, js, row, team)  # the feed saw +150 (2.5): the main line, not the +500
+    assert sel.market_description == "Game Lines / Point Spread"
+    row.sqline = 5.8
+    sel, _ = find_selection(ev, js, row, team)
+    assert sel.market_description == "Live Lines / Point Spread - Rest of Game"

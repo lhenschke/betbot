@@ -30,6 +30,7 @@ import yaml
 from .. import human
 from ..models import ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
 from ..matching.teams import normalize
+from ..odds import cents
 from .base import BookAdapter, LeagueNotMapped, UiNotReady, register
 
 log = logging.getLogger(__name__)
@@ -106,6 +107,7 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
         return None, "no matched team for a team bet"
     comp_names = [normalize(c.name) for c in event.competitors]
     seen_lines: list[str] = []
+    found: list[Selection] = []
 
     for dg in ev_json.get("displayGroups", []):
         for m in dg.get("markets", []):
@@ -136,12 +138,17 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
                 if not dec or not price.get("id"):
                     continue
                 is_open = m.get("status") == "O" and o.get("status") == "O"
-                return Selection(
+                found.append(Selection(
                     book=event.book, event=event, market_id=str(m["id"]),
                     market_description=f"{dg.get('description', '')} / {desc}", period=period,
                     outcome_id=str(o["id"]), outcome_description=o.get("description", ""),
                     price_id=str(price["id"]), decimal=dec, american=str(price.get("american", "")),
-                    handicap=hcap, is_open=is_open, raw={"market": m, "outcome": o}), "ok"
+                    handicap=hcap, is_open=is_open, raw={"market": m, "outcome": o}))
+    if found:
+        # The same team and line can be offered more than once (main and alternate lines, and live
+        # markets like "rest of game"): take the one priced closest to what the feed saw.
+        target = cents(row.sqline) if row.sqline > 1.0 else 0.0
+        return min(found, key=lambda s: abs(cents(s.decimal) - target)), "ok"
     if seen_lines:
         return None, f"line {want_line:g} not offered (book has {', '.join(sorted(set(seen_lines)))})"
     return None, f"no {rule['market_key']} {period} market"
