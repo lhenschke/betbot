@@ -52,8 +52,8 @@ books:
     adapter: bodog         # Bovada platform; BV (Bovada) can reuse it with base_url https://www.bovada.lv
     base_url: https://www.ozoon.eu
     account: me            # a label for this PC's OZ account (credentials are stored under it)
-    auto_mode: api         # automatic bets: the site's own API from inside the page (fast)
-    one_click_mode: ui     # one-click bets: real mouse and typing in the bet slip
+    auto_mode: ui          # automatic bets: real mouse and typing in the bet slip (api = the site's own calls, faster)
+    one_click_mode: ui     # one-click bets: the same; switch either on the dashboard
     stake: null            # per-book stake override
     min_request_gap_s: 0.75
     catalog_refresh_s: 60
@@ -67,8 +67,8 @@ books:
     base_url: https://engine.mybookie.ag
     start_path: /sports/home
     account: me            # a label for this PC's MyBookie account
-    auto_mode: api
-    one_click_mode: api    # clicking MyBookie's bet slip isn't set up yet
+    auto_mode: ui          # automatic bets: real mouse and typing in the bet slip
+    one_click_mode: ui     # one-click bets too (api = the site's own calls, faster; switch on the dashboard)
     stake: null
     min_request_gap_s: 0.75
     catalog_refresh_s: 60

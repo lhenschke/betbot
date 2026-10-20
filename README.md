@@ -40,8 +40,9 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
 
    It is then rounded down to a "nice" multiple of `round_to`, and skipped if below `min_stake`.
 5. **Place.** The bet is placed at the exact price that was checked, so the book rejects it if the line moved in the meantime. A price, spread or total change is re-quoted once and retried only if it still qualifies.
-   - **Auto bets (`api` mode, ~1–2s):** the event is put on screen, then the same calls the site's bet slip makes are run from inside the page: suggestion → max stake → place → status poll through the live delay.
-   - **One-click bets (`ui` mode, ~3–5s):** the bot clicks the outcome with a curved mouse path, types the stake, and clicks Place. If a page element can't be found before Place is clicked, it falls back to `api` mode.
+   - **Mouse (`ui` mode, ~3–5s), the default for automatic and one-click bets:** the bot clicks the outcome with a curved mouse path, types the stake, and clicks Place. If a page element can't be found before Place is clicked, the bet is skipped with the reason shown; it never switches to the API by itself.
+   - **API (`api` mode, ~1–2s):** the event is put on screen, then the same calls the site's bet slip makes are run from inside the page. Used only when you pick it: the **Fast** button on a queued row, or `api` mode for a book.
+   - Switch a book's modes by clicking `auto=` or `click=` in its status on the dashboard (saved to `config.yaml`).
 
 ### What `arbsize` means here
 
@@ -112,7 +113,7 @@ The dashboard also has endpoints to fix matching without editing files:
 - **MyBookie (`MyB`)** is enabled in `config.example.yaml`. A PC set up before it was added needs the `MyB` block copied from there into its own `config.yaml` (the key must be `MyB`, as the feed spells it).
   - NFL, NCAAF, NHL and MLB are built in; other leagues are found by name in MyBookie's menu. If one isn't, open it in capture mode: the summary shows `"leagueId": "…"` in its `leagues-lines` request. Add a name to `league_names` in `betbot/books/mybookie_markets.yaml`, or set `books.MyB.leagues: {NBA: "1167"}`.
   - Only full-game spreads, moneylines and totals are bet. Halves and quarters are separate MyBookie leagues.
-  - One-click bets go through the API for now (`one_click_mode: api`): clicking MyBookie's bet slip isn't set up yet.
+  - Bets are placed with the mouse by default, automatic and one-click alike (`auto_mode: ui`, `one_click_mode: ui`). The bot clicks the league in the left menu (or the live page for live games), clicks the odds, types the stake and presses Place. It won't bet if the bet slip already holds other selections: clear them in the Chrome window. As a last check it reads the bet request the page sends when Place is pressed, and blocks it unless it is exactly the one bet for the stake it typed. Click `auto=` or `click=` in the book's status on the dashboard to switch between mouse (`ui`) and the site's API (`api`).
   - The spread bet format is checked against a real captured bet. Moneyline and total bets use the same format, but haven't been seen in a capture yet; check the first one of each in "My Bets".
 - **Bovada (`BV`):** copy the `OZ` block under `books:` as `BV` with `base_url: https://www.bovada.lv`. It's the same platform.
 - **A different platform:** add `betbot/books/<name>.py` with a `BookAdapter` subclass decorated with `@register("<name>")`. It needs `resolve_league`, `events`, `quote`, `place_api` and `place_ui`; the matcher, engine and dashboard are shared.

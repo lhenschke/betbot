@@ -285,10 +285,9 @@ class Engine:
                     if mode == "ui":
                         try:
                             result = await adapter.place_ui(sel, stake, self.cfg.dry_run)
-                        except UiNotReady as e:
-                            log.warning("%s: %s; placing through the API instead", row_id, e)
-                            mode = "api"
-                            result = await adapter.place_api(sel, stake, self.cfg.dry_run)
+                        except UiNotReady as e:  # nothing was submitted; never quietly switch to the API
+                            log.warning("%s: mouse betting couldn't get to the bet: %s", row_id, e)
+                            return self._skip(v, f"mouse betting: {e}")
                     else:
                         result = await adapter.place_api(sel, stake, self.cfg.dry_run)
                 except PermissionError as e:

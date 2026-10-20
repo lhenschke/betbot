@@ -145,3 +145,23 @@ async def test_rejections_pause_auto(setup):
     adapter.reject_first = BetResult(BetStatus.REJECTED, 45, reason="MaxRisk")
     await feed(eng, poller, arbsize=2)
     assert eng.books["OZ"].paused
+
+
+async def test_mouse_betting_is_the_default_and_never_falls_back_to_the_api(setup):
+    from betbot.books.base import UiNotReady
+    cfg, ledger, poller, adapter, eng = setup
+    assert cfg.books["OZ"].auto_mode == "ui"
+    calls = []
+
+    async def ui_fails(sel, stake, dry_run):
+        calls.append("ui")
+        raise UiNotReady("odds button not found")
+
+    async def api(sel, stake, dry_run):
+        calls.append("api")
+
+    adapter.place_ui, adapter.place_api = ui_fails, api
+    adapter.decimal = 2.7
+    await feed(eng, poller, arbsize=2)
+    v = next(iter(eng.views.values()))
+    assert calls == ["ui"] and v.state == "skipped" and v.reason == "mouse betting: odds button not found"

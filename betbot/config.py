@@ -68,7 +68,7 @@ class BookConfig(BaseModel):
     base_url: str
     start_path: str = "/sports"  # page the browser opens on
     account: str = ""             # label for this PC's account, used in the ledger and credentials
-    auto_mode: PlaceMode = "api"
+    auto_mode: PlaceMode = "ui"
     one_click_mode: PlaceMode = "ui"
     leagues: dict[str, str] = Field(default_factory=dict)  # feed league -> book league path override
     stake: float | None = None    # per-book stake override

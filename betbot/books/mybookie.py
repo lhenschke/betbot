@@ -17,6 +17,7 @@ offset comes with every lines reply. All of this comes from a captured manual be
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import random
 import re
@@ -30,9 +31,10 @@ from zoneinfo import ZoneInfo
 import yaml
 
 from .. import human, odds
+from ..browser import _visible
+from ..matching.teams import normalize
 from ..models import ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
 from .base import BookAdapter, LeagueNotMapped, UiNotReady, register
-from ..matching.teams import normalize
 from .bodog import _f, parse_bettype
 
 log = logging.getLogger(__name__)
@@ -45,6 +47,23 @@ MENU = "/sports_api/get-menu"
 RULES_PATH = Path(__file__).with_name("mybookie_markets.yaml")
 SITE_TZ = ZoneInfo("America/New_York")  # only if a reply has no playerTimeZone
 RETRYABLE = re.compile(r"odd|line|point|price|chang", re.I)
+
+# Page selectors for 'ui' mode, from captures of the site; override per book under
+# books.MyB.ui_selectors if the site changes. The page keeps one URL for every league, so the
+# bot gets to a game by clicking the league in the left menu, opening its groups as needed.
+DEFAULT_SELECTORS = {
+    "menu_league": 'a[data-league_id="{league_id}"]',
+    "menu_group": '.parent-league-menu[data-parent_id="{group_id}"]',
+    "outcome": 'button.line-odds[id="{outcome_id}"]',  # its class gets "active" while in the bet slip
+    "live_link": '#live_item_link',
+    "live_sport": 'a[data-name="{sport}"]',
+    "betslip_tab": '#bet-slip-tab',                       # "Bet Slip 1": opens the slip, shows its count
+    "straight_tab": '#straight-tab a, a.bet-type-tab[data-type="straight"]',
+    "stake_input": '#betSlip input.risk_input.risk_straight',
+    "place_button": '#betSlip button.place-bet-btn',
+    "continue": '.bet-content__confirmation__new-bet',    # "CONTINUE BETTING" after a bet
+}
+LIVE_SPORT_NAMES = {"Ice Hockey": "Hockey", "American Football": "Football"}
 
 CSRF_JS = """
 () => {
@@ -94,6 +113,17 @@ def parse_events(data: Any, book: str, league_id: str) -> list[BookEvent]:
                     competitors=[Competitor(f"{g['id']}:visitor", away, False), Competitor(f"{g['id']}:home", home, True)],
                     live=bool(g.get("isLive")), link=league_id, league_link=league_id, raw=g))
     return out
+
+
+class _Stopped(Exception):
+    """The page's place-bet request wasn't the bet the bot set up; it was blocked."""
+
+
+def _json(text: Any) -> Any:
+    try:
+        return json.loads(text) if text else None
+    except ValueError:
+        return None
 
 
 def menu_leagues(menu: Any) -> list[dict[str, Any]]:
@@ -251,6 +281,7 @@ class MyBookieAdapter(BookAdapter):
         self._last_read = 0.0
         self._balance: tuple[float, float | None] = (0.0, None)
         self._menu: list[dict[str, Any]] | None = None
+        self.selectors = {**DEFAULT_SELECTORS, **(getattr(self.cfg, "ui_selectors", None) or {})}
         if self.browser:
             # the browser's default login check reads Ozoon's page API; MyBookie has its own
             self.browser.logged_in_check = self._logged_in
@@ -417,10 +448,182 @@ class MyBookieAdapter(BookAdapter):
             reason = f"HTTP {status}: {reason}"
         return BetResult(BetStatus.REJECTED, stake, price, reason=reason, retryable=retry, timings=timings, raw=resp)
 
+    # ----- betting by clicking the page like a person ----------------------
     async def place_ui(self, sel: Selection, stake: float, dry_run: bool) -> BetResult:
-        # The page keeps one URL for every league and the capture didn't record what identifies an
-        # outcome button, so clicking isn't set up yet; the engine places through the API instead.
-        raise UiNotReady("MyBookie bet slip clicking isn't set up yet")
+        """Click the outcome, type the stake, press Place, as a person would.
+
+        The bet slip's own check (bet-options, sent by the page when the outcome is clicked) gives
+        the price and limits. Anything that goes wrong before Place deselects the outcome again and
+        raises UiNotReady, so nothing is left in the slip.
+        """
+        if not self.browser:
+            raise UiNotReady("ui mode needs a browser")
+        page = self.browser.page
+        t0 = time.monotonic()
+        timings: dict[str, float] = {}
+        s = {k: v.format(outcome_id=sel.outcome_id, league_id=sel.event.league_link, group_id="{group_id}",
+                         sport="{sport}") for k, v in self.selectors.items()}
+        outcome = _visible(page, s["outcome"])
+        try:
+            await page.bring_to_front()
+            await self._show_outcome(page, sel, s, outcome)
+            if await self._slip_count(page, s):
+                raise UiNotReady("the bet slip already has selections in it; clear it in the Chrome window")
+            async with page.expect_response(
+                    lambda r: r.request.method == "POST" and r.url.split("?")[0].endswith(OPTIONS),
+                    timeout=10000) as info:
+                await human.click(page, outcome)
+            resp = await info.value
+            sent, opts = _json(resp.request.post_data), await resp.json()
+            ids = {o.get("id") for b in (sent or {}).get("bets") or [] for o in b.get("OutComeList") or []}
+            if ids != {int(sel.outcome_id)}:
+                raise UiNotReady("the bet slip has other selections in it; clear it in the Chrome window")
+            timings["options_ms"] = (time.monotonic() - t0) * 1000
+            content = opts.get("content") if isinstance(opts, dict) else None
+            if not content or not content[0].get("selections"):
+                raise UiNotReady(f"no bet slip reply (HTTP {resp.status})")
+            c, sl = content[0], content[0]["selections"][0]
+            if not c.get("isSuccess", True) or not (sl.get("error") or {}).get("isSuccess", True):
+                reason = str(c.get("errorMessage") or (sl.get("error") or {}).get("errorMessage")
+                             or c.get("errorMessageKey") or "bet slip refused the selection")
+                await self._deselect(page, outcome)
+                return BetResult(BetStatus.REJECTED, stake, sel.decimal, timings=timings, raw=opts,
+                                 reason=f"bet slip says: {reason}", retryable=bool(RETRYABLE.search(reason)))
+            price, point = to_decimal(sl.get("odd")), _f(sl.get("point"))
+            moved = None
+            if price is None or price < sel.decimal - 1e-6:
+                moved = f"PriceChange: bet slip offers {sl.get('odd')}, quoted {sel.american}"
+            elif sel.handicap is not None and (point is None or abs(point - sel.handicap) > 1e-9):
+                moved = f"LineChange: bet slip has {sl.get('point')}, quoted {sel.handicap:g}"
+            if moved:
+                await self._deselect(page, outcome)
+                return BetResult(BetStatus.REJECTED, stake, sel.decimal, retryable=True, timings=timings,
+                                 raw=opts, reason=moved)
+            mx = max_risk(sl)
+            if mx is not None and stake > mx:
+                stake = float(int(mx))
+            await human.click(page, _visible(page, s["straight_tab"]), optional=True)
+            stake_box = _visible(page, s["stake_input"])
+            if not await stake_box.count():
+                await human.click(page, _visible(page, s["betslip_tab"]), optional=True)
+            await stake_box.wait_for(state="visible", timeout=6000)
+            await human.type_into(page, stake_box, f"{stake:g}")
+            place_btn = _visible(page, s["place_button"])
+            await place_btn.wait_for(state="visible", timeout=6000)
+        except UiNotReady:
+            await self._deselect(page, outcome)
+            raise
+        except Exception as e:  # nothing has been submitted yet
+            await self._deselect(page, outcome)
+            raise UiNotReady(f"bet slip page element not found: {e}") from e
+        timings["filled_ms"] = (time.monotonic() - t0) * 1000
+        if dry_run:
+            await asyncio.sleep(random.uniform(1.0, 2.0))
+            await self._deselect(page, outcome)
+            return BetResult(BetStatus.DRY_RUN, stake, price, timings=timings,
+                             reason="stopped before Place" + (f" (max stake {mx:g})" if mx is not None else ""))
+        # Last check, on the request itself as the page sends it: exactly this one bet, for exactly this
+        # stake. Anything else (another selection, the stake typed into the wrong box) is stopped.
+        sent: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        async def guard(route: Any) -> None:
+            bets = (_json(route.request.post_data) or {}).get("Bets") or []
+            ok = (len(bets) == 1 and str(bets[0].get("betId")) == sel.outcome_id
+                  and abs((_f(bets[0].get("amount")) or -1.0) - stake) < 0.005)
+            if not sent.done():
+                sent.set_result((ok, bets))
+            await (route.continue_() if ok else route.abort())
+
+        await page.route(f"**{PLACE}", guard)
+        try:
+            async with page.expect_response(
+                    lambda r: r.request.method == "POST" and r.url.split("?")[0].endswith(PLACE),
+                    timeout=20000) as info:
+                await human.pause(0.2, 0.6)
+                await human.click(page, place_btn)
+                ok, bets = await asyncio.wait_for(sent, 20)
+                if not ok:
+                    raise _Stopped(bets)
+            resp = await info.value
+        except _Stopped as e:
+            await self._deselect(page, outcome)
+            got = [(b.get("betId"), b.get("amount")) for b in e.args[0]]
+            return BetResult(BetStatus.REJECTED, stake, price, timings=timings,
+                             reason=f"stopped: the bet slip was about to send {got}, not {sel.outcome_id} for {stake:g}")
+        finally:
+            await page.unroute(f"**{PLACE}", guard)
+        timings["post_ms"] = timings["final_ms"] = (time.monotonic() - t0) * 1000
+        if resp.status in (401, 419):
+            raise PermissionError("session expired")
+        data = await resp.json()
+        state, ref, reason, retry = interpret_place(data)
+        if state == "SUCCESS":
+            await human.pause(1.0, 2.5)
+            await human.click(page, _visible(page, s["continue"]), optional=True)
+            return BetResult(BetStatus.ACCEPTED, stake, price, reference=ref, timings=timings, raw=data)
+        await self._deselect(page, outcome)
+        if state == "UNKNOWN":
+            return BetResult(BetStatus.ERROR, stake, price, reason=reason, timings=timings, raw=data)
+        return BetResult(BetStatus.REJECTED, stake, price, reason=reason, retryable=retry, timings=timings, raw=data)
+
+    async def _show_outcome(self, page: Any, sel: Selection, s: dict[str, str], outcome: Any) -> None:
+        """Get the outcome's button on screen: its league from the menu, or the live page."""
+        if await outcome.count():
+            return
+        if not await page.locator(s["menu_league"]).count():
+            await self.browser.visit(self.cfg.base_url + self.cfg.start_path)
+        await self._open_league(page, s)
+        try:
+            await outcome.wait_for(state="visible", timeout=8000)
+            return
+        except Exception:  # noqa: BLE001 - live games may only be on the live page
+            if not (sel.event.live or (sel.event.raw or {}).get("isLive")):
+                raise
+        sport = (sel.event.raw or {}).get("sport", "")
+        await human.click(page, _visible(page, s["live_link"]))
+        await human.pause(0.8, 1.6)
+        await human.click(page, _visible(page, s["live_sport"].format(sport=LIVE_SPORT_NAMES.get(sport, sport))))
+        await outcome.wait_for(state="visible", timeout=8000)
+
+    async def _open_league(self, page: Any, s: dict[str, str]) -> None:
+        """Click the league in the left menu, first opening the groups it sits in (BASEBALL > USA > MLB)."""
+        links = page.locator(s["menu_league"])
+        n = await links.count()
+        if not n:
+            raise UiNotReady("league not in the page's menu")
+        chains = []
+        for i in range(n):
+            groups = await links.nth(i).evaluate(
+                "a => { const g = []; for (let n = a.parentElement; n; n = n.parentElement)"
+                " if (n.matches('.left-menu-group[data-id]')) g.unshift(n.getAttribute('data-id')); return g; }")
+            visible = await links.nth(i).is_visible()
+            chains.append((not visible, len(groups), i, groups))
+        _, _, i, groups = min(chains)  # a link already showing, else the one fewest groups deep
+        link = links.nth(i)
+        for depth, gid in enumerate(groups):
+            nxt = (page.locator(s["menu_group"].format(group_id=groups[depth + 1])).first
+                   if depth + 1 < len(groups) else link)
+            if await nxt.is_visible():
+                continue
+            await human.click(page, _visible(page, s["menu_group"].format(group_id=gid)))
+            await nxt.wait_for(state="visible", timeout=4000)
+        await human.click(page, link)
+        await human.pause(0.6, 1.4)
+
+    async def _slip_count(self, page: Any, s: dict[str, str]) -> int:
+        tab = page.locator(s["betslip_tab"]).first
+        if not await tab.count():
+            return 0
+        m = re.search(r"\d+", await tab.inner_text())
+        return int(m.group()) if m else 0
+
+    async def _deselect(self, page: Any, outcome: Any) -> None:
+        """Take the outcome out of the bet slip: clicking a selected outcome again removes it."""
+        try:
+            if await outcome.count() and "active" in (await outcome.get_attribute("class") or "").split():
+                await human.click(page, outcome)
+        except Exception:  # noqa: BLE001 - best effort
+            log.warning("%s: could not clear the outcome from the bet slip", self.code)
 
     # ----- staying humanlike -----------------------------------------------
     async def idle_action(self) -> None:

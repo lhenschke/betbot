@@ -96,6 +96,14 @@ async function post(url, body) {
 function arbCell(v) { return v == null ? '<td class="num muted">–</td>' : `<td class="num ${v > 0 ? "pos" : "neg"}">${v > 0 ? "+" : ""}${v}</td>`; }
 function betText(r) { return `${esc(r.sq_team)} ${esc(r.bettype)} ${r.line ?? ""}${r.live ? " · LIVE " + esc(r.livetime || "") : ""}`; }
 
+// "auto=api" / "click=ui" in a book's pill: click to switch between the site's API and mouse clicks.
+function modeLink(code, key, label, mode) {
+  const next = mode === "ui" ? "api" : "ui";
+  const body = JSON.stringify({books: {[code]: {[key]: next}}});
+  return `<a href="#" title="${mode === "ui" ? "mouse clicks" : "site API"}; click to switch to ${next}" ` +
+         `onclick='post("/api/settings",${esc(body)}).then(load);return false'>${label}=${esc(mode)}</a>`;
+}
+
 function render() {
   if (!state) return;
   const s = state.settings;
@@ -108,7 +116,8 @@ function render() {
     const txt = !b.enabled ? "off" : b.paused ? "paused: " + b.paused : b.logged_in === false ? "logged out" :
                 b.logged_in ? "logged in" + (b.balance != null ? " · $" + b.balance.toFixed(2) : "") : "no browser";
     const resume = b.paused ? ` <button onclick='post("/api/settings",{books:{${JSON.stringify(code)}:{unpause:true}}}).then(load)'>Resume</button>` : "";
-    return `<span class="pill ${cls}">${esc(code)}: ${esc(txt)} · auto=${b.mode}, click=${b.one_click_mode}</span>${resume}`;
+    return `<span class="pill ${cls}">${esc(code)}: ${esc(txt)} · ${modeLink(code, "auto_mode", "auto", b.mode)}, ` +
+           `${modeLink(code, "one_click_mode", "click", b.one_click_mode)}</span>${resume}`;
   }).join(" ");
   const bad = state.feeds.filter(f => !f.ok);
   $("feeds").textContent = `${state.feeds.length} feeds` + (bad.length ? ` · ${bad.length} failing` : "");
