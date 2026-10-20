@@ -19,7 +19,6 @@ thresholds:
   one_click_tolerance: 1   # a one-click bet may slip this many cents below what you saw
   max_live_age_s: 15       # no automatic live bets while the feed hasn't updated for this many seconds
   max_prematch_age_s: 0    # the same for pre-match rows (0 = off)
-  max_price_gap: 30        # never bet when the book's price is this many cents from the feed's (0 = off)
 
 stake:
   default: 50

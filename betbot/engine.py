@@ -19,7 +19,7 @@ from .feed import FeedPoller, FeedUpdate
 from .ledger import Ledger
 from .matching.matcher import match_row
 from .models import ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
-from .odds import arbsize_cents, cents, decimal_to_american
+from .odds import decimal_to_american
 
 log = logging.getLogger(__name__)
 
@@ -195,21 +195,13 @@ class Engine:
             v.live_arbsize, v.reason = None, why
             return None
         latest = self.poller.get(v.row.id) or v.row
-        v.live_arbsize = arbsize_cents(sel.decimal, latest.pinnline)
-        v.reason = (self.price_gap(latest, sel) or "") if sel.is_open else "market closed or suspended"
+        # The arbhunterpro feed's price and arbsize are trusted; the book page is read only to find the
+        # outcome to bet. The price is verified once, in the bet slip, against the feed's price below.
+        v.live_arbsize = latest.arbsize
+        if sel.decimal > 1.0 and latest.sqline > 1.0:
+            sel.decimal, sel.american = latest.sqline, _am(latest.sqline)
+        v.reason = "" if sel.is_open else "market closed or suspended"
         return sel
-
-    def price_gap(self, row: ArbRow, sel: Selection) -> str | None:
-        """Why not to trust a quote whose price is far from the one the feed saw for the same bet: the
-        bot found a different market (e.g. a live "rest of game" line), or one side is stale."""
-        limit = self.cfg.thresholds.max_price_gap
-        if not limit or row.sqline <= 1.0 or sel.decimal <= 1.0:
-            return None
-        gap = abs(cents(sel.decimal) - cents(row.sqline))
-        if gap <= limit:
-            return None
-        return (f"book price {sel.american} is {gap:.0f} cents from the feed's {_am(row.sqline)}: "
-                f"probably a different market or a stale price; not betting")
 
     # ----- the bet ------------------------------------------------------------
     def in_active_hours(self) -> bool:
@@ -298,10 +290,8 @@ class Engine:
                     return self._skip(v, v.reason or "selection not found")
                 if not sel.is_open:
                     return self._skip(v, "market closed or suspended")
-                if gap := self.price_gap(latest, sel):
-                    return self._skip(v, gap)
                 if v.live_arbsize is None or v.live_arbsize < min_arbsize - 1e-9:
-                    return self._skip(v, f"value gone: arbsize now {v.live_arbsize:.1f} < {min_arbsize:g}")
+                    return self._skip(v, f"value gone: feed arbsize now {v.live_arbsize:.1f} < {min_arbsize:g}")
                 acct = self.account(book)
                 if self.ledger.already_bet(acct, sel.key, include_dry_run=self.cfg.dry_run):
                     v.state, v.reason = "placed", "already bet this selection"

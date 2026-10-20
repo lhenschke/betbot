@@ -17,7 +17,6 @@ class Thresholds(BaseModel):
     one_click_tolerance: float = 1.0  # one-click bets may slip this many cents below what was shown
     max_live_age_s: float = 15.0   # no automatic live bets while the feed hasn't updated for this long
     max_prematch_age_s: float = 0.0  # the same for pre-match rows; 0 = off
-    max_price_gap: float = 30.0    # cents between the book's price now and the feed's; more = another market or stale
 
 
 class StakeConfig(BaseModel):

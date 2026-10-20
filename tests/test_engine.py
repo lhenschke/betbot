@@ -66,14 +66,13 @@ def test_classify(setup):
 
 async def test_auto_bet_dry_run_and_dedupes(setup):
     cfg, ledger, poller, adapter, eng = setup
-    # sqline 2.5 vs pinnline 1.649 is -4 in the feed; OZ now offers 2.7 (+170) vs -154 -> +16
     adapter.decimal = 2.7
     await feed(eng, poller, arbsize=2)
     assert len(adapter.placed) == 1
     sel, stake, dry = adapter.placed[0]
     assert dry is True and stake == 47  # your stake as set: rounding is only for limits that cut it
     v = next(iter(eng.views.values()))
-    assert v.state == "placed" and v.live_arbsize == pytest.approx(16, abs=0.1)
+    assert v.state == "placed" and v.live_arbsize == 2  # the feed's arbsize, trusted as-is
     # the same row changing again must not bet the same selection twice
     await feed(eng, poller, arbsize=3, sqline=2.55)
     assert len(adapter.placed) == 1
@@ -81,11 +80,11 @@ async def test_auto_bet_dry_run_and_dedupes(setup):
 
 async def test_value_gone_is_not_bet(setup):
     cfg, ledger, poller, adapter, eng = setup
-    adapter.decimal = 2.3  # +130 vs -154 -> -24
-    await feed(eng, poller, arbsize=2)
-    assert adapter.placed == []
+    await feed(eng, poller, arbsize=0)  # borderline, queued, shown at arbsize 0
     v = next(iter(eng.views.values()))
-    assert v.state == "skipped" and "value gone" in v.reason
+    poller.diff("u", [parse_row(feed_row(arbsize=-10), "u")], None)  # the feed's arb collapses
+    res = await eng.one_click(v.row.id)
+    assert res.status.value == "rejected" and "value gone" in res.reason and adapter.placed == []
 
 
 async def test_closed_market_is_not_bet(setup):
@@ -183,11 +182,12 @@ async def test_ignored_row_can_be_placed_by_hand(setup):
     await feed(eng, poller, arbsize=-6)  # below borderline_min: matched, but neither bet nor queued
     v = next(iter(eng.views.values()))
     assert v.category == "ignored" and v.state == "matched" and adapter.placed == []
-    res = await eng.one_click(v.row.id)  # the price now (2.5 vs 1.649 -> -4) is still >= -6 - tolerance
+    res = await eng.one_click(v.row.id)  # feed arb -6 is still >= shown -6, minus tolerance
     assert res.status.value == "dry_run" and len(adapter.placed) == 1
-    adapter.decimal = 2.2  # +120 vs -154 -> -34: worse than what was shown, so not placed
-    await feed(eng, poller, arbsize=-7, sqline=2.4, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-6.5", spread=-6.5)
-    res = await eng.one_click("221026-1715_OZ_NFL_NWE_CHI_ATS_-6.5")
+    other = "221026-1715_OZ_NFL_NWE_CHI_ATS_-6.5"
+    await feed(eng, poller, arbsize=-6, id=other, spread=-6.5)
+    poller.diff("u", [parse_row(feed_row(arbsize=-20, id=other, spread=-6.5), "u")], None)  # arb collapses
+    res = await eng.one_click(other)
     assert res.status.value == "rejected" and "value gone" in res.reason and len(adapter.placed) == 1
 
 
@@ -243,19 +243,6 @@ async def test_a_limit_that_cuts_the_stake_is_rounded_but_not_to_nothing(setup):
     assert v.reason == "book limit leaves only 4.5, below min_stake 5"
 
 
-async def test_book_price_far_from_the_feed_is_never_bet(setup):
-    cfg, ledger, poller, adapter, eng = setup
-    adapter.decimal = 6.0  # +500, where the feed saw +210: another market or a stale price
-    await feed(eng, poller, arbsize=2, sqline=3.1)
-    v = next(iter(eng.views.values()))
-    assert adapter.placed == [] and v.reason.startswith("book price +150 is 290 cents from the feed's +210")
-    res = await eng.one_click(v.row.id)  # not by hand either
-    assert res.status.value == "rejected" and adapter.placed == []
-    cfg.thresholds.max_price_gap = 0  # switched off
-    res = await eng.one_click(v.row.id)
-    assert res.status.value == "dry_run"
-
-
 async def test_feed_age_only_holds_back_automatic_bets(setup):
     cfg, ledger, poller, adapter, eng = setup
     adapter.decimal = 2.7
@@ -268,11 +255,12 @@ async def test_feed_age_only_holds_back_automatic_bets(setup):
     assert res.status.value == "dry_run" and len(adapter.placed) == 1
 
 
-async def test_skipped_automatic_row_can_be_placed_by_hand_at_the_new_price(setup):
+async def test_skipped_automatic_row_can_be_placed_by_hand(setup):
     cfg, ledger, poller, adapter, eng = setup
-    adapter.decimal = 2.45  # +145 vs -154 -> -9: the price dropped, so not bet automatically
+    cfg.auto_enabled = False  # an auto row the bot won't place by itself
     await feed(eng, poller, arbsize=2)
     v = next(iter(eng.views.values()))
     assert v.category == "auto" and v.state == "skipped" and adapter.placed == []
-    res = await eng.one_click(v.row.id)  # placed at what the row now shows (-9), within the tolerance
+    cfg.auto_enabled = True
+    res = await eng.one_click(v.row.id)  # but can still be placed by hand
     assert res.status.value == "dry_run" and len(adapter.placed) == 1

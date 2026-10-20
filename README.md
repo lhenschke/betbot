@@ -26,11 +26,9 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
 2. **Match.** The row is matched to the book's event using start time (±90 min) and team names, with per-league alias files in `betbot/matching/aliases/`. Abbreviations like `NWE` are checked against the opponent.
    - A doubtful match is shown as **unmatched** with the reason. It is never guessed.
    - Leagues are found automatically from the book's own league list, e.g. NHL → `/hockey/nhl`.
-3. **Re-check, just before betting:**
-   - fetch the event's current odds from the book;
-   - the spread or total must equal the feed's line exactly;
-   - the market must be open;
-   - **arbsize is recomputed** from the book's current price against the feed's latest Pinnacle price, and must still meet the threshold;
+3. **Decide, just before betting:**
+   - the **feed's arbsize is trusted** and must still meet the threshold; the bot does not re-price the book to recompute it. The book page is read only to find which outcome to bet (its line must equal the feed's exactly) and whether that market is open.
+   - the **price is verified once, in the bet slip**: the bet is placed only if the slip offers at least the price the feed saw at the book, so a price that has moved against you is refused there, not guessed at from a separate odds fetch.
    - automatic live bets wait while the feed itself has stopped updating (its `runtime` hasn't moved for `max_live_age_s`). A row's own `date` is when its prices last changed, so a steady line isn't treated as stale. Bets you click skip this check.
 4. **Stake.** The lowest of:
    - your stake;
