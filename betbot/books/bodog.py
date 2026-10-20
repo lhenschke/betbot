@@ -49,6 +49,7 @@ DEFAULT_SELECTORS = {
     "place_button": '[data-testid="betslip-container"] button:has-text("Place Bet")',
     "confirmation": '[data-testid="bet-slip-single-tab-confirmation-bet"]',
     "clear_all": '[data-testid="clear-all-button"]',
+    "market_group": 'button, a, [role="tab"], [role="button"], h2, h3, h4',  # a market section's heading
 }
 
 
@@ -426,6 +427,7 @@ class BodogAdapter(BookAdapter):
             await self.browser.accept_cookies()
             await human.click(page, page.locator(s["clear_all"]).first, optional=True)
             outcome = page.locator(s["outcome"]).first
+            await self._open_market_group(page, sel, outcome)
             await outcome.wait_for(state="visible", timeout=8000)
             await human.click(page, outcome)
             stake_box = page.locator(s["stake_input"]).first
@@ -450,6 +452,22 @@ class BodogAdapter(BookAdapter):
         result = await self._await_result(resp, headers, timings, t0)
         result.stake, result.decimal = stake, sel.decimal
         return result
+
+    async def _open_market_group(self, page: Any, sel: Selection, outcome: Any) -> None:
+        """Alternate lines sit in their own section of the game page ("Alternate Lines"), which may be
+        closed: if the outcome isn't showing, click that section's heading or tab first."""
+        try:
+            await outcome.wait_for(state="visible", timeout=3000)
+            return
+        except Exception:  # noqa: BLE001 - not showing yet
+            pass
+        group = sel.market_description.split(" / ")[0].strip()
+        if not group:
+            return
+        heading = page.locator(f"{self.selectors['market_group']} >> visible=true").filter(
+            has_text=re.compile(rf"^\s*{re.escape(group)}\b", re.I))
+        await human.click(page, heading.first, optional=True)
+        await human.pause(0.3, 0.8)
 
     # ----- staying humanlike -----------------------------------------------
     async def idle_action(self) -> None:

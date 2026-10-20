@@ -143,7 +143,7 @@ function render() {
     ${arbCell(r.arbsize)}${arbCell(r.live_arbsize)}<td>${esc(r.book)}</td><td>${esc(r.league)}</td><td>${betText(r)}</td>
     <td class="num">${dec2am(r.sqline)} / ${dec2am(r.pinnline)}</td><td>${esc(r.selection || r.event || "")}</td>
     <td>${esc(r.category)}</td><td>${esc(r.state)}</td><td class="muted">${esc(r.reason)}</td>
-    <td>${placeable(r) ? `<button onclick="placeIgnored('${esc(r.id)}')" title="Below the arb threshold: place it anyway (re-quoted first)">Place</button>` : ""}</td></tr>`).join("");
+    <td>${placeable(r) ? `<button onclick="placeIgnored('${esc(r.id)}')" title="Place it anyway: re-quoted first, placed if the price hasn't dropped further">Place</button>` : ""}</td></tr>`).join("");
   $("bets").innerHTML = state.bets.map(b => { const t = JSON.parse(b.timings || "{}"); return `<tr>
     <td>${new Date(b.ts * 1000).toLocaleTimeString()}</td><td>${esc(b.book)}</td><td>${esc(b.description)}</td>
     <td class="num">${b.stake}</td><td class="num">${dec2am(b.decimal)}</td><td class="num">${b.arbsize == null ? "" : b.arbsize.toFixed(1)}</td>
@@ -152,12 +152,13 @@ function render() {
 }
 async function updateNow() { const r = await post("/api/update"); notify(r.reason || "checking…"); load(); }
 async function load() { state = await (await fetch("/api/state")).json(); render(); }
-// Rows below the borderline threshold never reach the queue, but a matched one can still be placed by hand.
-const placeable = (r) => r.category === "ignored" && r.event && !["placing", "placed", "gone"].includes(r.state);
+// Matched rows the bot won't bet by itself can still be placed by hand: those below the borderline
+// threshold (they never reach the queue) and automatic ones it skipped (value gone, pacing...).
+const placeable = (r) => r.event && (r.category === "ignored" || (r.category === "auto" && r.state === "skipped"));
 function placeIgnored(id) {
   const r = state.rows.find(x => x.id === id);
   if (!r || !confirm(`Place ${r.sq_team} ${r.bettype} ${r.line ?? ""} at ${r.book}?\n${r.event}\n` +
-                     `Feed arb ${r.arbsize}: it's re-quoted first and placed only if the price hasn't dropped further ` +
+                     `Arb ${r.live_arbsize ?? r.arbsize}: it's re-quoted first and placed only if the price hasn't dropped further ` +
                      `(beyond your one-click tolerance).`)) return;
   place(id);
 }

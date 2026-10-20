@@ -119,12 +119,23 @@ async def test_auto_off_and_caps(setup):
     assert next(iter(eng.views.values())).reason == "daily cap leaves only 3, below min_stake 5"
 
 
-async def test_live_row_too_old_is_skipped(setup):
+async def feed_from(eng, poller, runtime, **row):
+    """Like feed(), from feed URL "u" with the feed's runtime stamp."""
+    await eng.on_feed(poller.diff("u", [parse_row(feed_row(**row), "u")], runtime))
+    await asyncio.gather(*list(eng._tasks))
+
+
+async def test_steady_live_line_is_bet_but_not_while_the_feed_is_stuck(setup):
     cfg, ledger, poller, adapter, eng = setup
     adapter.decimal = 2.7
-    await feed(eng, poller, arbsize=2, livetime="Q2 10:00", date="2020-01-01 00:00:00")
-    assert adapter.placed == []
-    assert "old" in next(iter(eng.views.values())).reason
+    # the row's date is when its prices last changed: a line steady for minutes is still current
+    await feed_from(eng, poller, 1000.0, arbsize=2, livetime="Q2 10:00", date="2020-01-01 00:00:00")
+    assert len(adapter.placed) == 1
+    poller.runtime_moved["u"] -= 60  # the feed's runtime hasn't moved for a minute
+    await feed_from(eng, poller, 1000.0, arbsize=2, livetime="Q2 09:00", id="221026-1715_OZ_NFL_NWE_CHI_ATS_-4",
+                    spread=-4)
+    assert len(adapter.placed) == 1
+    assert eng.views["221026-1715_OZ_NFL_NWE_CHI_ATS_-4"].reason == "the feed hasn't updated for 60s"
 
 
 async def test_price_change_rejection_requotes_once(setup):
@@ -248,8 +259,20 @@ async def test_book_price_far_from_the_feed_is_never_bet(setup):
 async def test_feed_age_only_holds_back_automatic_bets(setup):
     cfg, ledger, poller, adapter, eng = setup
     adapter.decimal = 2.7
-    await feed(eng, poller, arbsize=2, livetime="Q2 05:00", date="2026-01-01 00:00:00")  # hours old
+    poller.diff("u", [], 999.0)
+    poller.runtime_moved["u"] -= 60  # stuck feed
+    await feed_from(eng, poller, 999.0, arbsize=2, livetime="Q2 05:00")
     v = next(iter(eng.views.values()))
-    assert adapter.placed == [] and "old" in v.reason
+    assert adapter.placed == [] and "hasn't updated" in v.reason
     res = await eng.one_click(v.row.id)
+    assert res.status.value == "dry_run" and len(adapter.placed) == 1
+
+
+async def test_skipped_automatic_row_can_be_placed_by_hand_at_the_new_price(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    adapter.decimal = 2.45  # +145 vs -154 -> -9: the price dropped, so not bet automatically
+    await feed(eng, poller, arbsize=2)
+    v = next(iter(eng.views.values()))
+    assert v.category == "auto" and v.state == "skipped" and adapter.placed == []
+    res = await eng.one_click(v.row.id)  # placed at what the row now shows (-9), within the tolerance
     assert res.status.value == "dry_run" and len(adapter.placed) == 1

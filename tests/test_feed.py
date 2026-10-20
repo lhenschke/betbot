@@ -70,3 +70,15 @@ def test_real_live_rows():
     live, pre = rows
     assert (live.league, live.is_live, live.away_abbr, live.home_abbr, live.total) == ("NHL", True, "ANA", "NYR", 6.5)
     assert (pre.league, pre.is_live, pre.away_abbr, pre.home_abbr) == ("NHL", False, "LAK", "WSH")
+
+
+def test_feed_age_follows_the_runtime_not_the_rows():
+    p = FeedPoller([])
+    assert p.feed_age("u") is None
+    p.diff("u", [], 100.0)
+    assert p.feed_age("u") < 1
+    p.runtime_moved["u"] -= 30
+    p.diff("u", [], 100.0)  # same runtime: the feed is stuck
+    assert 29 < p.feed_age("u") < 31
+    p.diff("u", [], 101.0)  # it moved
+    assert p.feed_age("u") < 1

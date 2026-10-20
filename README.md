@@ -31,7 +31,7 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
    - the spread or total must equal the feed's line exactly;
    - the market must be open;
    - **arbsize is recomputed** from the book's current price against the feed's latest Pinnacle price, and must still meet the threshold;
-   - live rows must have a Pinnacle price no older than `max_live_age_s`.
+   - automatic live bets wait while the feed itself has stopped updating (its `runtime` hasn't moved for `max_live_age_s`). A row's own `date` is when its prices last changed, so a steady line isn't treated as stale. Bets you click skip this check.
 4. **Stake.** The lowest of:
    - your stake;
    - the feed's `book_limit`;
@@ -98,7 +98,7 @@ Steps 1 and 2 confirm two things this code couldn't test directly: the bet reque
   - **Place** (humanlike clicking), **Fast** (API) and **Dismiss** buttons;
   - a sound and a desktop notification when a new one arrives.
 - **Feed rows:** every row for enabled books, with its category, state, and why it was skipped, unmatched or not mapped.
-  - A matched row that's ignored for being below the borderline threshold has a **Place** button. After you confirm, it's re-quoted and placed like a one-click bet, only if the price hasn't dropped further than your `one_click_tolerance`. It never goes into the queue.
+  - A matched row the bot won't bet by itself has a **Place** button: one ignored for being below the borderline threshold, or an automatic one it skipped (e.g. the price dropped). After you confirm, it's re-quoted and placed like a one-click bet, only if the price hasn't dropped further than your `one_click_tolerance`. It never goes into the queue.
 - **Recent bets:** stake, price, arbsize at the time of the bet, mode, result, and time from start to accepted.
 
 The dashboard also has endpoints to fix matching without editing files:

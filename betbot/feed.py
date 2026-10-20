@@ -158,6 +158,8 @@ class FeedPoller:
                                                   headers={"User-Agent": "betbot/0.1"})
         self.rows: dict[str, dict[str, ArbRow]] = {}
         self.last_ok: dict[str, float] = {}
+        self.runtime: dict[str, float] = {}
+        self.runtime_moved: dict[str, float] = {}  # local time each feed's runtime last advanced
         self.errors: dict[str, str] = {}
 
     def current(self) -> dict[str, ArbRow]:
@@ -177,7 +179,18 @@ class FeedPoller:
         for gone in set(self.rows) - set(urls):
             self.rows.pop(gone, None)
 
+    def feed_age(self, url: str) -> float | None:
+        """Seconds since this feed last produced new data: since its runtime last moved, timed on this
+        PC's clock so a PC clock that's off doesn't matter (or since the last good poll if it has none).
+
+        A row's own "date" is when its prices last changed, so a steady line looks old while still current.
+        """
+        t = self.runtime_moved.get(url) or self.last_ok.get(url)
+        return time.time() - t if t else None
+
     def diff(self, url: str, new_rows: list[ArbRow], runtime: float | None) -> FeedUpdate:
+        if runtime is not None and runtime != self.runtime.get(url):
+            self.runtime[url], self.runtime_moved[url] = runtime, time.time()
         old = self.rows.get(url, {})
         new = {r.id: r for r in new_rows}
         upd = FeedUpdate(feed_url=url, runtime=runtime)

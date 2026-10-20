@@ -272,9 +272,10 @@ class Engine:
         if latest is None:
             return self._skip(v, "row no longer in the feed")
         age_limit = th.max_live_age_s if latest.is_live else th.max_prematch_age_s
-        # Only automatic bets wait for a fresh feed row; a bet you click is re-quoted at the book and placed.
-        if auto and age_limit and latest.updated_at and time.time() - latest.updated_at > age_limit:
-            return self._skip(v, f"feed row is {time.time() - latest.updated_at:.0f}s old")
+        feed_age = self.poller.feed_age(latest.feed_url)
+        # Only automatic bets wait for a live feed; a bet you click is re-quoted at the book and placed.
+        if auto and age_limit and feed_age is not None and feed_age > age_limit:
+            return self._skip(v, f"the feed hasn't updated for {feed_age:.0f}s")
         if block := self.pacing_block(book):
             if auto:
                 return self._skip(v, block)

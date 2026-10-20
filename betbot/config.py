@@ -15,8 +15,8 @@ class Thresholds(BaseModel):
     auto_min: float = 1.0          # arbsize at or above this is placed automatically
     borderline_min: float = -3.0   # arbsize from here up to auto_min goes to the one-click queue
     one_click_tolerance: float = 1.0  # one-click bets may slip this many cents below what was shown
-    max_live_age_s: float = 15.0   # live rows whose feed "date" is older than this are not bet
-    max_prematch_age_s: float = 0.0  # 0 disables the age check for pre-match rows
+    max_live_age_s: float = 15.0   # no automatic live bets while the feed hasn't updated for this long
+    max_prematch_age_s: float = 0.0  # the same for pre-match rows; 0 = off
     max_price_gap: float = 30.0    # cents between the book's price now and the feed's; more = another market or stale
 
 
