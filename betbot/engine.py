@@ -215,6 +215,8 @@ class Engine:
         return None
 
     def stake_for(self, row: ArbRow, sel: Selection) -> tuple[float, str]:
+        """Your stake, exactly as set. Only when a limit cuts it down is the result rounded down to a
+        multiple of round_to (never to nothing) and held to min_stake (in attempt)."""
         sc = self.cfg.stake
         acct = self.account(row.book)
         caps = {"stake": self.cfg.stake_for(row.book)}
@@ -224,9 +226,9 @@ class Engine:
         day_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         caps["daily cap"] = sc.daily_cap - self.ledger.staked_since(acct, day_start)
         limit_name, amount = min(caps.items(), key=lambda kv: kv[1])
-        if sc.round_to > 0:
+        if limit_name != "stake" and sc.round_to > 0 and amount >= sc.round_to:
             amount = int(amount / sc.round_to) * sc.round_to
-        return max(0.0, amount), limit_name
+        return max(0.0, int(amount * 100) / 100), limit_name
 
     def _skip(self, v: RowView, reason: str) -> BetResult:
         v.state, v.reason = ("queued" if v.category == BORDERLINE else "skipped"), reason
@@ -288,8 +290,9 @@ class Engine:
                         and random.random() < self.cfg.pacing.skip_marginal_pct):
                     return self._skip(v, "randomly skipped marginal bet (pacing)")
                 stake, limit_name = self.stake_for(latest, sel)
-                if stake < self.cfg.stake.min_stake:
-                    return self._skip(v, f"stake {stake:g} below minimum ({limit_name})")
+                if stake <= 0 or (limit_name != "stake" and stake < self.cfg.stake.min_stake):
+                    return self._skip(v, f"{limit_name} leaves only {stake:g}, below min_stake "
+                                         f"{self.cfg.stake.min_stake:g}")
                 if auto and attempt_no == 0:
                     lo, hi = self.cfg.pacing.live_delay_s if latest.is_live else self.cfg.pacing.prematch_delay_s
                     await asyncio.sleep(random.uniform(lo, hi))

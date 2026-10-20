@@ -38,7 +38,7 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
    - the book's max stake;
    - the per-event and daily caps.
 
-   It is then rounded down to a "nice" multiple of `round_to`, and skipped if below `min_stake`.
+   Your stake is placed exactly as you set it. Only when one of the limits cuts it down is it rounded down to a "nice" multiple of `round_to` (never to zero), and skipped if the limit leaves less than `min_stake`.
 5. **Place.** The bet is placed at the exact price that was checked, so the book rejects it if the line moved in the meantime. A price, spread or total change is re-quoted once and retried only if it still qualifies.
    - **Mouse (`ui` mode, ~3–5s), the default for automatic and one-click bets:** the bot clicks the outcome with a curved mouse path, types the stake, and clicks Place. If a page element can't be found before Place is clicked, the bet is skipped with the reason shown; it never switches to the API by itself.
    - **API (`api` mode, ~1–2s):** the event is put on screen, then the same calls the site's bet slip makes are run from inside the page. Used only when you pick it: the **Fast** button on a queued row, or `api` mode for a book.

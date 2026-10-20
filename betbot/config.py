@@ -21,8 +21,8 @@ class Thresholds(BaseModel):
 
 class StakeConfig(BaseModel):
     default: float = 50.0
-    round_to: float = 5.0          # stakes are rounded down to a "nice" multiple of this
-    min_stake: float = 5.0
+    round_to: float = 5.0          # a stake cut down by a limit is rounded down to a "nice" multiple of this
+    min_stake: float = 5.0         # and skipped if the limit leaves less; your own stake is placed as set
     max_per_event: float = 500.0
     daily_cap: float = 5000.0
 

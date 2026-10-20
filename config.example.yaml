@@ -22,8 +22,8 @@ thresholds:
 
 stake:
   default: 50
-  round_to: 5              # stakes are rounded down to a multiple of this (looks human)
-  min_stake: 5
+  round_to: 5              # your stake is placed as set; a stake cut down by a limit is rounded down to this
+  min_stake: 5             # ...and skipped if a limit leaves less than this
   max_per_event: 500       # total staked on one game, per account
   daily_cap: 5000
 

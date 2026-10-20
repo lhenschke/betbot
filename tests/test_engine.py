@@ -64,14 +64,14 @@ def test_classify(setup):
     assert eng.classify(-4) == IGNORED
 
 
-async def test_auto_bet_dry_run_rounds_stake_and_dedupes(setup):
+async def test_auto_bet_dry_run_and_dedupes(setup):
     cfg, ledger, poller, adapter, eng = setup
     # sqline 2.5 vs pinnline 1.649 is -4 in the feed; OZ now offers 2.7 (+170) vs -154 -> +16
     adapter.decimal = 2.7
     await feed(eng, poller, arbsize=2)
     assert len(adapter.placed) == 1
     sel, stake, dry = adapter.placed[0]
-    assert dry is True and stake == 45  # 47 rounded down to a multiple of 5
+    assert dry is True and stake == 47  # your stake as set: rounding is only for limits that cut it
     v = next(iter(eng.views.values()))
     assert v.state == "placed" and v.live_arbsize == pytest.approx(16, abs=0.1)
     # the same row changing again must not bet the same selection twice
@@ -116,7 +116,7 @@ async def test_auto_off_and_caps(setup):
     cfg.dry_run = False
     await feed(eng, poller, arbsize=3, sqline=2.6)
     assert adapter.placed == []
-    assert "below minimum" in next(iter(eng.views.values())).reason
+    assert next(iter(eng.views.values())).reason == "daily cap leaves only 3, below min_stake 5"
 
 
 async def test_live_row_too_old_is_skipped(setup):
@@ -208,3 +208,25 @@ async def test_row_that_leaves_the_feed_mid_processing_stays_gone(setup):
         v = next(iter(eng.views.values()))
         assert v.state == "gone", (slow, v.state)
         setattr(adapter, slow, real_quote if slow == "quote" else real_events)
+
+
+async def test_your_stake_is_placed_exactly_as_set(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    cfg.stake.default, adapter.decimal = 2, 2.7  # below round_to and min_stake: still placed as set
+    await feed(eng, poller, arbsize=2)
+    assert [stake for _, stake, _ in adapter.placed] == [2]
+    cfg.stake.default = 47
+    eng.views.clear()
+    await feed(eng, poller, arbsize=2, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-4", spread=-4)
+    assert [stake for _, stake, _ in adapter.placed] == [2, 47]
+
+
+async def test_a_limit_that_cuts_the_stake_is_rounded_but_not_to_nothing(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    adapter.decimal = 2.7
+    await feed(eng, poller, arbsize=2, book_limit=38)  # the feed's book limit: 38 -> 35
+    await feed(eng, poller, arbsize=2, book_limit=7, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-4", spread=-4)  # 7 -> 5
+    await feed(eng, poller, arbsize=2, book_limit=4.5, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-6", spread=-6)
+    assert [stake for _, stake, _ in adapter.placed] == [35, 5]
+    v = eng.views["221026-1715_OZ_NFL_NWE_CHI_ATS_-6"]  # 4.5 stays 4.5, which is under min_stake 5
+    assert v.reason == "book limit leaves only 4.5, below min_stake 5"
