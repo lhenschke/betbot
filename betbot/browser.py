@@ -42,7 +42,8 @@ DEFAULT_LOGIN_SELECTORS = {
     "email": 'input[type="email"], input[autocomplete="username"], input[name*="email" i], '
              'input[id*="email" i], input[name*="user" i]',
     "password": 'input[type="password"]',
-    "submit": 'form button[type="submit"], button:has-text("Log In"), button:has-text("Login")',
+    "submit": 'button[type="submit"], input[type="submit"], button:has-text("Log In"), button:has-text("Login"), '
+              'button:has-text("Sign In")',
     "remember": 'input[type="checkbox"][name*="remember" i], input[type="checkbox"][id*="remember" i]',
     "cookies": 'button:has-text("Accept All"), button:has-text("ACCEPT ALL")',
     "login_path": "/login",
@@ -50,6 +51,14 @@ DEFAULT_LOGIN_SELECTORS = {
                  'iframe[src*="turnstile"]',
     "challenge_text": r"verification code|verify your|one-time code|security code|captcha",
 }
+
+LOGIN_HINTS_JS = """
+() => [...document.querySelectorAll('a, button, [role=button], input[type=submit]')]
+  .filter(e => e.offsetParent !== null && /log ?in|sign ?in|account/i.test(
+    (e.innerText || e.value || '') + ' ' + e.id + ' ' + e.className))
+  .slice(0, 15)
+  .map(e => `${e.tagName} "${(e.innerText || e.value || '').trim().slice(0, 30)}" id=${e.id} class=${String(e.className).slice(0, 60)}`)
+"""
 
 FETCH_JS = """
 async ([method, url, body, headers]) => {
@@ -93,7 +102,7 @@ CAPTURE_CLICK_JS = """
     const path = ev.composedPath().filter(n => n instanceof Element).slice(0, 6).map(n => ({
       tag: n.tagName, testid: n.getAttribute('data-testid'), cls: (n.className || '').toString().slice(0, 80),
       text: (n.innerText || '').slice(0, 60),
-      attrs: Object.fromEntries([...n.attributes].filter(a => a.name === 'id' || a.name.startsWith('data-'))
+      attrs: Object.fromEntries([...n.attributes].filter(a => /^(id|name|type|placeholder|autocomplete|href|data-.*)$/.test(a.name))
                                 .map(a => [a.name, a.value.slice(0, 80)]))}));
     window.betbotClick && window.betbotClick(JSON.stringify(path));
   }, true);
@@ -237,10 +246,12 @@ class BrowserSession:
         if self.base_url not in page.url:
             await self.visit(self.base_url + self.start_path)
         await self.accept_cookies()
-        pw_box = page.locator(s["password"]).first
-        if not await pw_box.is_visible():
-            opener = page.locator(s["open_login"]).first
-            if await opener.count() and await opener.is_visible():
+        # Sites often keep hidden copies of their login links and forms (mobile menus, closed
+        # modals), so every lookup takes the first *visible* match.
+        pw_box = _visible(page, s["password"])
+        if not await pw_box.count():
+            opener = _visible(page, s["open_login"])
+            if await opener.count():
                 await human.click(page, opener)
             else:
                 await self.visit(self.base_url + s["login_path"])
@@ -248,17 +259,26 @@ class BrowserSession:
             try:
                 await pw_box.wait_for(state="visible", timeout=10000)
             except Exception:
-                return "failed:login form did not appear"
+                log.warning("login form not found on %s; login-looking elements: %s",
+                            page.url, await self._login_hints())
+                return f"failed:login form did not appear on {page.url.split('?')[0]}"
+        email_box = _visible(page, s["email"])
+        if not await email_box.count():  # no recognisable username box: the text box before the password
+            email_box = pw_box.locator("xpath=preceding::input[not(@type) or @type='text' or @type='email' "
+                                       "or @type='tel'][1]")
         await human.pause(0.4, 1.0)
-        await human.type_into(page, page.locator(s["email"]).first, email)
+        await human.type_into(page, email_box, email)
         await human.pause(0.3, 0.8)
         await human.type_into(page, pw_box, password)
         await human.pause(0.3, 0.9)
-        remember = page.locator(s["remember"]).first
+        remember = _visible(page, s["remember"])
         if await remember.count() and not await remember.is_checked():
             await human.click(page, remember, optional=True)
             await human.pause(0.2, 0.6)
-        submit = page.locator(s["submit"]).first
+        # Prefer the submit button of the password's own form: a header "Login" button that
+        # opened the form would just close it again.
+        form = pw_box.locator("xpath=ancestor::form[1]")
+        submit = _visible(form, s["submit"]) if await form.count() else _visible(page, s["submit"])
         if await submit.count():
             await human.click(page, submit)
         else:
@@ -273,6 +293,12 @@ class BrowserSession:
             if await self.challenge_visible():
                 return "challenge"
         return "failed:not logged in after submitting"
+
+    async def _login_hints(self) -> list[str]:
+        try:
+            return await self._eval(self.page, LOGIN_HINTS_JS)
+        except Exception:  # noqa: BLE001 - only for the log
+            return []
 
     async def accept_cookies(self) -> None:
         """Click the cookie banner away, as a person would before doing anything else."""
@@ -374,6 +400,11 @@ class BrowserSession:
         print(f"Capture mode: log in, browse a league and a game, then place one small bet by hand.\n"
               f"Recording to {out_path} (summary: {summary_path}). Close this window when done.")
         await asyncio.sleep(seconds)
+
+
+def _visible(scope: Any, selector: str) -> Any:
+    """The first element matching selector that is actually shown."""
+    return scope.locator(f"{selector} >> visible=true").first
 
 
 _STATIC = re.compile(r"\.(svg|png|jpe?g|gif|webp|ico|css|js|woff2?|ttf|map)$", re.I)
