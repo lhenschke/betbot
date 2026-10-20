@@ -244,3 +244,9 @@ def test_live_rows_use_live_markets_only():
     js["displayGroups"].insert(0, {"description": "Game Lines", "markets": [live]})
     assert find_selection(ev, js, live_row, team)[0].market_id == "777"
     assert find_selection(ev, js, row, team)[0].market_id == pre["id"]  # pre-game row: pre-game market
+
+
+def test_accepted_price_reads_what_the_book_took():
+    from betbot.books.bodog import accepted_price
+    assert accepted_price(load("oz_capture_bet.json")["status_response"]) == pytest.approx(1.91)
+    assert accepted_price({"bets": {"bet": [{}]}}) is None and accepted_price(None) is None

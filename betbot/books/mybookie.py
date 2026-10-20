@@ -258,6 +258,13 @@ def max_risk(selection: dict[str, Any]) -> float | None:
     return risk
 
 
+def accepted_price(resp: Any) -> float | None:
+    """The decimal price MyBookie took, from a place-bet reply (content[0].details[0].odd)."""
+    content = resp.get("content") if isinstance(resp, dict) else None
+    details = (content[0].get("details") or []) if content else []
+    return to_decimal(details[0].get("odd")) if details else None
+
+
 def interpret_place(resp: Any) -> tuple[str, str | None, str | None, bool]:
     """-> (SUCCESS|FAIL|UNKNOWN, ticket number, reason, retryable) from a place-bet reply."""
     content = resp.get("content") if isinstance(resp, dict) else None
@@ -443,7 +450,8 @@ class MyBookieAdapter(BookAdapter):
             raise PermissionError("session expired")
         state, ref, reason, retry = interpret_place(resp)
         if state == "SUCCESS":
-            return BetResult(BetStatus.ACCEPTED, stake, price, reference=ref, timings=timings, raw=resp)
+            return BetResult(BetStatus.ACCEPTED, stake, accepted_price(resp) or price, reference=ref,
+                             timings=timings, raw=resp)
         if state == "UNKNOWN":
             return BetResult(BetStatus.ERROR, stake, price, reason=reason, timings=timings, raw=resp)
         if status >= 400:
@@ -529,12 +537,21 @@ class MyBookieAdapter(BookAdapter):
         sent: asyncio.Future = asyncio.get_running_loop().create_future()
 
         async def guard(route: Any) -> None:
-            bets = (_json(route.request.post_data) or {}).get("Bets") or []
+            body = _json(route.request.post_data) or {}
+            bets = body.get("Bets") or []
+            details = (bets[0].get("details") or [{}]) if bets else [{}]
             ok = (len(bets) == 1 and str(bets[0].get("betId")) == sel.outcome_id
-                  and abs((_f(bets[0].get("amount")) or -1.0) - stake) < 0.005)
+                  and abs((_f(bets[0].get("amount")) or -1.0) - stake) < 0.005
+                  and _f(details[0].get("odd")) == _f(sl.get("odd")))
             if not sent.done():
                 sent.set_result((ok, bets))
-            await (route.continue_() if ok else route.abort())
+            if not ok:
+                await route.abort()
+            elif str(body.get("AcceptOddsChanges", "false")).lower() != "false":
+                # the slip's "accept odds changes" setting would take any new price: send it switched off
+                await route.continue_(post_data=json.dumps({**body, "AcceptOddsChanges": "false"}))
+            else:
+                await route.continue_()
 
         await page.route(f"**{PLACE}", guard)
         try:
@@ -549,9 +566,10 @@ class MyBookieAdapter(BookAdapter):
             resp = await info.value
         except _Stopped as e:
             await self._deselect(page, outcome)
-            got = [(b.get("betId"), b.get("amount")) for b in e.args[0]]
-            return BetResult(BetStatus.REJECTED, stake, price, timings=timings,
-                             reason=f"stopped: the bet slip was about to send {got}, not {sel.outcome_id} for {stake:g}")
+            got = [(b.get("betId"), b.get("amount"), (b.get("details") or [{}])[0].get("odd")) for b in e.args[0]]
+            return BetResult(BetStatus.REJECTED, stake, price, timings=timings, retryable=True,
+                             reason=f"stopped: the bet slip was about to send {got}, not {sel.outcome_id} "
+                                    f"for {stake:g} at {sl.get('odd')}")
         finally:
             await page.unroute(f"**{PLACE}", guard)
         timings["post_ms"] = timings["final_ms"] = (time.monotonic() - t0) * 1000
@@ -562,7 +580,8 @@ class MyBookieAdapter(BookAdapter):
         if state == "SUCCESS":
             await human.pause(1.0, 2.5)
             await human.click(page, _visible(page, s["continue"]), optional=True)
-            return BetResult(BetStatus.ACCEPTED, stake, price, reference=ref, timings=timings, raw=data)
+            return BetResult(BetStatus.ACCEPTED, stake, accepted_price(data) or price, reference=ref,
+                             timings=timings, raw=data)
         await self._deselect(page, outcome)
         if state == "UNKNOWN":
             return BetResult(BetStatus.ERROR, stake, price, reason=reason, timings=timings, raw=data)

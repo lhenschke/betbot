@@ -16,6 +16,7 @@ The bet payload mirrors what the site's own bet slip sends. Capture mode
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import random
 import re
@@ -199,6 +200,25 @@ def build_bet_payload(sel: Selection, stake: float, suggestion: dict[str, Any] |
     if line_group is not None:
         payload["lineGroup"] = line_group
     return payload
+
+
+class _Stopped(Exception):
+    """The page's bet request wasn't the bet the bot checked; it was blocked."""
+
+
+def _json(text: Any) -> Any:
+    try:
+        return json.loads(text) if text else None
+    except ValueError:
+        return None
+
+
+def accepted_price(resp: Any) -> float | None:
+    """The decimal price the book took, from a placement/status reply ("price": "1.91")."""
+    for b in ((resp or {}).get("bets") or {}).get("bet", []) if isinstance(resp, dict) else []:
+        if (p := _f(b.get("price"))) and p > 1.0:
+            return p
+    return None
 
 
 def _errors(resp: Any) -> list[dict[str, Any]]:
@@ -393,7 +413,7 @@ class BodogAdapter(BookAdapter):
             raise PermissionError("session expired")
         result = await self._await_result(resp, headers, timings, t0)
         result.stake = stake
-        result.decimal = sel.decimal
+        result.decimal = result.decimal or sel.decimal
         return result
 
     async def _await_result(self, resp: Any, headers: dict[str, str], timings: dict[str, float],
@@ -409,7 +429,7 @@ class BodogAdapter(BookAdapter):
             state, ref, reason, retry = interpret_result(resp)
         timings["final_ms"] = (time.monotonic() - t0) * 1000
         if state == "SUCCESS":
-            return BetResult(BetStatus.ACCEPTED, 0, reference=ref, timings=timings, raw=resp)
+            return BetResult(BetStatus.ACCEPTED, 0, accepted_price(resp), reference=ref, timings=timings, raw=resp)
         if state == "PENDING":
             return BetResult(BetStatus.ERROR, 0, reason="no final status (check My Bets)", timings=timings, raw=resp)
         return BetResult(BetStatus.REJECTED, 0, reason=reason, retryable=retry, timings=timings, raw=resp)
@@ -442,15 +462,56 @@ class BodogAdapter(BookAdapter):
             await human.click(page, page.locator(s["clear_all"]).first, optional=True)
             return BetResult(BetStatus.DRY_RUN, stake, sel.decimal, reason="stopped before Place",
                              timings=timings)
-        async with page.expect_response(
-                lambda r: r.request.method == "POST" and r.url.rstrip("/").endswith("/bet/betslip"),
-                timeout=15000) as resp_info:
-            await human.click(page, page.locator(s["place_button"]).first)
-        resp = await (await resp_info.value).json()
-        timings["post_ms"] = (time.monotonic() - t0) * 1000
+        # The slip takes whatever price it shows when Place is clicked, and prices move while it's being
+        # filled in. So check the current price just before Place, and let the page send only that
+        # exact price (by its priceId) for this outcome and stake; anything else is blocked.
         headers = await self._session_headers()
+        sug = await self.suggestion(sel, headers)
+        price = suggestion_price(sug, sel.outcome_id)
+        price_id = next((str(x.get("priceId")) for x in ((sug or {}).get("selections") or {}).get("selection", [])
+                         if str(x.get("outcomeId")) == sel.outcome_id), None)
+        if price is None or not price_id or price < sel.decimal - 1e-6:
+            await human.click(page, page.locator(s["clear_all"]).first, optional=True)
+            return BetResult(BetStatus.REJECTED, stake, sel.decimal, retryable=True, timings=timings, raw=sug,
+                             reason=f"PriceChange: bet slip now offers {price or '?'}, quoted {sel.decimal:g}")
+        sent: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        async def guard(route: Any) -> None:
+            if route.request.method != "POST":  # the slip's own price checks (GET .../betslip?outcomeId=)
+                await route.continue_()
+                return
+            body = _json(route.request.post_data) or {}
+            sels = (body.get("selections") or {}).get("selection") or []
+            bets = (body.get("bets") or {}).get("bet") or []
+            ok = (len(sels) == 1 and len(bets) == 1 and str(sels[0].get("outcomeId")) == sel.outcome_id
+                  and str(sels[0].get("priceId")) == price_id
+                  and bets[0].get("stakePerLine") == int(round(stake * 100)))
+            if not sent.done():
+                sent.set_result((ok, sels, bets))
+            await (route.continue_() if ok else route.abort())
+
+        pattern = re.compile(r"/bet/betslip/?(\?.*)?$")
+        await page.route(pattern, guard)
+        try:
+            async with page.expect_response(
+                    lambda r: r.request.method == "POST" and r.url.rstrip("/").endswith("/bet/betslip"),
+                    timeout=15000) as resp_info:
+                await human.click(page, page.locator(s["place_button"]).first)
+                ok, sels, bets = await asyncio.wait_for(sent, 15)
+                if not ok:
+                    raise _Stopped(sels, bets)
+            resp = await (await resp_info.value).json()
+        except _Stopped as e:
+            await human.click(page, page.locator(s["clear_all"]).first, optional=True)
+            got = [(x.get("outcomeId"), x.get("priceId")) for x in e.args[0]]
+            return BetResult(BetStatus.REJECTED, stake, price, retryable=True, timings=timings,
+                             reason=f"stopped: the bet slip was about to send {got} for "
+                                    f"{[b.get('stakePerLine') for b in e.args[1]]} cents, not the price just checked")
+        finally:
+            await page.unroute(pattern, guard)
+        timings["post_ms"] = (time.monotonic() - t0) * 1000
         result = await self._await_result(resp, headers, timings, t0)
-        result.stake, result.decimal = stake, sel.decimal
+        result.stake, result.decimal = stake, result.decimal or price
         return result
 
     async def _open_market_group(self, page: Any, sel: Selection, outcome: Any) -> None:

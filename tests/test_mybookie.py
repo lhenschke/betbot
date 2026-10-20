@@ -238,3 +238,9 @@ def test_live_row_is_not_priced_from_a_pregame_listing():
     live = parse_events(load("myb_lines_nhl_live.json")["response"], "MyB", "4345")[0]
     sel, why = find_selection(live, live.raw, myb_row(league="NHL", bettype="ML", spread="None"), live.competitors[0])
     assert sel is None and why == "the book lists this game as live"
+
+
+def test_accepted_price_reads_what_mybookie_took():
+    from betbot.books.mybookie import accepted_price
+    assert accepted_price(load("myb_capture_bet.json")["place_response"]) == pytest.approx(1.8333, abs=1e-3)
+    assert accepted_price({"content": [{"details": []}]}) is None and accepted_price(None) is None
