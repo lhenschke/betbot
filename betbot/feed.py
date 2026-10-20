@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -50,15 +51,22 @@ def _parse_date(v: Any, tz: ZoneInfo) -> float | None:
         return None
 
 
-def _abbrs(row_id: str, book: str, league: str) -> tuple[str | None, str | None]:
+_LIVE_LEAGUE = re.compile(r"\s+LIVE$|^LIVE\s+", re.I)
+
+
+def base_league(league: str) -> str:
+    """'NFL LIVE' -> 'NFL': live rows come under their own league name in the feed."""
+    return _LIVE_LEAGUE.sub("", league.strip())
+
+
+def _abbrs(row_id: str, book: str, *leagues: str) -> tuple[str | None, str | None]:
     """Pull AWAY/HOME abbreviations out of ids like 251026-0630_LV_NFL_NOR_PIT_ATS_-3.
 
     Abbreviations may contain '-' (M-OH) but not '_', so split on '_'.
     """
     parts = row_id.split("_")
-    try:
-        i = parts.index(league, 1)
-    except ValueError:
+    i = next((parts.index(lg, 1) for lg in leagues if lg in parts[1:]), None)
+    if i is None:
         return None, None
     if i + 2 >= len(parts):
         return None, None
@@ -76,7 +84,11 @@ def parse_row(d: dict[str, Any], feed_url: str = "", tz: ZoneInfo | None = None)
         arbsize = float(d["arbsize"])
     except (KeyError, TypeError, ValueError):
         return None
-    away, home = _abbrs(row_id, book, league)
+    league, raw_league = base_league(league), league
+    away, home = _abbrs(row_id, book, raw_league, league)
+    livetime = _none(d.get("livetime"))
+    if livetime is None and league != raw_league:
+        livetime = "LIVE"  # a live-league row is live even without a clock, so live age checks apply
     start = _float(d.get("start_date"))
     return ArbRow(
         id=row_id,
@@ -92,7 +104,7 @@ def parse_row(d: dict[str, Any], feed_url: str = "", tz: ZoneInfo | None = None)
         total=_float(d.get("total")),
         start_ms=int(start) if start is not None else None,
         updated_at=_parse_date(d.get("date"), tz),
-        livetime=_none(d.get("livetime")),
+        livetime=livetime,
         line3=_none(d.get("line3")),
         market_note=_none(d.get("market")),
         book_limit=_float(d.get("book_limit")),

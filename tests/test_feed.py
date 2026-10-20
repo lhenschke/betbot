@@ -22,6 +22,17 @@ def test_live_row():
     assert r.is_live
 
 
+def test_live_league_name_maps_to_the_league():
+    # live rows come as league "NFL LIVE"; books and team aliases only know "NFL"
+    for rid in ("191026-2015_OZ_NFL LIVE_WSH_SF_ATS_6.5", "191026-2015_OZ_NFL_WSH_SF_ATS_6.5"):
+        r = parse_row(feed_row(id=rid, league="NFL LIVE", sq_team="Washington Commanders", spread=6.5,
+                               livetime="14:55 - 1st"))
+        assert r.league == "NFL" and r.is_live and (r.away_abbr, r.home_abbr) == ("WSH", "SF")
+    r = parse_row(feed_row(league="NFL LIVE"))
+    assert r.league == "NFL" and r.is_live  # live even without a clock
+    assert parse_row(feed_row(league="NCAAF")).league == "NCAAF"
+
+
 def test_runtime_and_bad_rows():
     rows, runtime = parse_feed([feed_row(), {"junk": 1}, {"runtime": 1792442892.9}])
     assert len(rows) == 1 and runtime == 1792442892.9
