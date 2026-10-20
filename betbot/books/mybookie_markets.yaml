@@ -21,9 +21,17 @@ periods:
   FG:   G
   GAME: G
 
-# Feed league -> MyBookie leagueId (the "Game Odds" league, from the site's menu).
-# Others can be set per PC under books.MyB.leagues; a capture shows the id in
-# each leagues-lines request ({"leagueId": "79", ...}) when you open the league.
+# Feed league -> MyBookie leagueId of its main game-lines league. Leagues not
+# listed here are looked up by name in the site's menu (get-menu), using
+# league_names below; books.MyB.leagues in config overrides both.
 league_ids:
   NFL: "79"
+  NCAAF: "78"
   NHL: "4345"
+  MLB: "710"
+
+# Names the menu may use for a feed league. A league not listed is looked up by
+# its own name (NBA, CFL, WNBA...).
+league_names:
+  NCAAF: [NCAA Football, College Football]
+  NCAAB: [NCAA Basketball, College Basketball]

@@ -177,6 +177,54 @@ async def test_login_check_is_installed_on_the_browser():
 
 async def test_league_ids():
     a = adapter(CaptureTransport({}))
-    assert await a.resolve_league("NFL") == "79" and await a.resolve_league("NHL") == "4345"
+    assert [await a.resolve_league(lg) for lg in ("NFL", "NCAAF", "NHL", "MLB")] == ["79", "78", "4345", "710"]
+    a.cfg.leagues["NFL"] = "999"
+    assert await a.resolve_league("NFL") == "999"  # config overrides the built-in ids
+
+
+def menu():
+    from betbot.books.mybookie import menu_leagues
+    return menu_leagues(load("myb_menu.json"))
+
+
+@pytest.mark.parametrize("league,names,lid", [
+    ("NFL", [], "79"), ("NHL", [], "4345"), ("MLB", [], "710"), ("NBA", [], "1167"), ("CFL", [], "84"),
+    ("NCAAF", ["NCAA Football", "College Football"], "78"), ("XFL", [], None),
+])
+def test_league_discovery_from_the_menu(league, names, lid):
+    from betbot.books.mybookie import pick_league
+    assert pick_league(league, menu(), names) == lid
+
+
+async def test_unlisted_league_is_looked_up_in_the_menu():
+    class MenuTransport:
+        calls = []
+
+        async def request(self, method, path, *, body=None, headers=None):
+            self.calls.append((method, path))
+            return 200, load("myb_menu.json")
+
+    t = MenuTransport()
+    a = adapter(t)
+    assert await a.resolve_league("NCAAF") == "78" and t.calls == []  # built in
+    assert await a.resolve_league("NBA") == "1167" and await a.resolve_league("CFL") == "84"
+    assert t.calls == [("GET", "/sports_api/get-menu")]  # fetched once
     with pytest.raises(LeagueNotMapped):
-        await a.resolve_league("MLB")
+        await a.resolve_league("XFL")
+
+
+def test_ncaaf_and_mlb_feed_rows_match():
+    evs = parse_events(load("myb_lines_ncaaf.json")["response"], "MyB", "78")
+    for d in load("feed_ncaaf-pro.json"):
+        if d.get("id") == "221026-1600_MyB_NCAAF_LIB_KENN_ATS_11":
+            row = parse_row(d)
+    m = match_row(row, evs)
+    assert m.ok and m.event.description == "Liberty Flames @ Kennesaw State Owls", m.reason
+    sel, why = find_selection(m.event, m.event.raw, row, m.team)
+    assert (sel and sel.label == "Kennesaw State Owls +11") or "line 11 not offered" in why
+    evs = parse_events(load("myb_lines_mlb.json")["response"], "MyB", "710")
+    row = parse_row(next(d for d in load("feed_mlb-pro.json") if d.get("book") == "MyB"))
+    m = match_row(row, evs)
+    assert m.ok and m.team.name == "Tampa Bay Rays"
+    sel, why = find_selection(m.event, m.event.raw, row, m.team)
+    assert sel and sel.label == "Tampa Bay Rays -1.5" and sel.american == "+140"

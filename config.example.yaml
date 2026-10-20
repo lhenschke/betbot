@@ -73,7 +73,7 @@ books:
     min_request_gap_s: 0.75
     catalog_refresh_s: 60
     live_catalog_refresh_s: 5
-    leagues: {}            # NFL and NHL are built in; add others as leagueIds, e.g. {MLB: "1234"}
+    leagues: {}            # only if a league isn't found automatically, as leagueIds, e.g. {NBA: "1167"}
     login_selectors: {}
 
 auto_update: true         # pull new versions from GitHub and restart (only when no bet is in progress)

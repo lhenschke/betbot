@@ -5,6 +5,7 @@ Endpoints (POST with a JSON body, relative to the book's base URL):
   options  /sports_api/bet-options    the bet slip's check: current price, limits, securityCode
   place    /sports_api/place-bet      the bet itself, carrying that securityCode
   balance  /update-balance            {"available": "$18.00", ...}; also the login check
+  menu     GET /sports_api/get-menu   every league with its leagueId, for finding leagues by name
 
 Like the site's own calls, every request carries the page's CSRF tokens (X-CSRF-TOKEN from the
 page, X-XSRF-TOKEN from its cookie). Prices are American odds in each outcome's "odd";
@@ -31,6 +32,7 @@ import yaml
 from .. import human, odds
 from ..models import ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
 from .base import BookAdapter, LeagueNotMapped, UiNotReady, register
+from ..matching.teams import normalize
 from .bodog import _f, parse_bettype
 
 log = logging.getLogger(__name__)
@@ -39,6 +41,7 @@ LINES = "/sports_api/leagues-lines"
 OPTIONS = "/sports_api/bet-options"
 PLACE = "/sports_api/place-bet"
 BALANCE = "/update-balance"
+MENU = "/sports_api/get-menu"
 RULES_PATH = Path(__file__).with_name("mybookie_markets.yaml")
 SITE_TZ = ZoneInfo("America/New_York")  # only if a reply has no playerTimeZone
 RETRYABLE = re.compile(r"odd|line|point|price|chang", re.I)
@@ -91,6 +94,35 @@ def parse_events(data: Any, book: str, league_id: str) -> list[BookEvent]:
                     competitors=[Competitor(f"{g['id']}:visitor", away, False), Competitor(f"{g['id']}:home", home, True)],
                     live=bool(g.get("isLive")), link=league_id, league_link=league_id, raw=g))
     return out
+
+
+def menu_leagues(menu: Any) -> list[dict[str, Any]]:
+    """Every league link in the site's menu (it lists most leagues more than once)."""
+    out: list[dict[str, Any]] = []
+
+    def walk(nodes: Any) -> None:
+        for n in nodes if isinstance(nodes, list) else []:
+            if isinstance(n, dict):
+                if n.get("type") == "league_link" and n.get("league_id"):
+                    out.append(n)
+                walk(n.get("children"))
+
+    walk((menu or {}).get("menu_data") if isinstance(menu, dict) else None)
+    return out
+
+
+def pick_league(feed_league: str, leagues: list[dict[str, Any]], names: list[str]) -> str | None:
+    """leagueId of the menu league named like the feed league: 'NFL Game Odds' for NFL, 'NCAA Football'
+    for NCAAF. Short names aren't used: futures like 'NFL Offensive Rookie of the Year' have short
+    name 'NFL' too. Pre-game links win over live-only ones."""
+    wanted = {normalize(n) for n in [feed_league, *names]}
+    hits = [n for n in leagues
+            if re.sub(r" (game odds|game lines|lines)$", "", normalize(n.get("display_name") or "")) in wanted]
+    if not hits:
+        return None
+    hits.sort(key=lambda n: bool(n.get("is_live")))
+    ids = [str(n["league_id"]) for n in hits if not n.get("is_live")] or [str(hits[0]["league_id"])]
+    return max(set(ids), key=ids.count)
 
 
 def find_selection(event: BookEvent, game: dict[str, Any], row: ArbRow, team: Competitor | None,
@@ -218,6 +250,7 @@ class MyBookieAdapter(BookAdapter):
         self._gate = asyncio.Lock()
         self._last_read = 0.0
         self._balance: tuple[float, float | None] = (0.0, None)
+        self._menu: list[dict[str, Any]] | None = None
         if self.browser:
             # the browser's default login check reads Ozoon's page API; MyBookie has its own
             self.browser.logged_in_check = self._logged_in
@@ -255,6 +288,14 @@ class MyBookieAdapter(BookAdapter):
             break
         return status, data
 
+    async def _menu_leagues(self) -> list[dict[str, Any]]:
+        if self._menu is None:
+            status, data = await self.transport.request("GET", MENU, headers=await self._headers())
+            if status >= 400:
+                raise RuntimeError(f"GET {MENU} -> HTTP {status}")
+            self._menu = menu_leagues(data)
+        return self._menu
+
     async def _logged_in(self) -> bool:
         status, data = await self._post(BALANCE)
         if status == 200 and isinstance(data, dict) and "available" in data:
@@ -275,12 +316,18 @@ class MyBookieAdapter(BookAdapter):
             return str(self.cfg.leagues[feed_league])
         if self.ledger and (lid := self.ledger.get_league_path(self.code, feed_league)):
             return lid
-        lid = (self.rules.get("league_ids") or {}).get(feed_league.upper())
+        if lid := (self.rules.get("league_ids") or {}).get(feed_league.upper()):
+            return str(lid)
+        names = (self.rules.get("league_names") or {}).get(feed_league.upper(), [])
+        lid = pick_league(feed_league, await self._menu_leagues(), names)
         if not lid:
             raise LeagueNotMapped(
-                f"{self.code}: no leagueId known for {feed_league} (set books.{self.code}.leagues.{feed_league} "
+                f"{self.code} has no league named {feed_league} (set books.{self.code}.leagues.{feed_league} "
                 f"in config; capture mode shows it as \"leagueId\" when you open the league)")
-        return str(lid)
+        if self.ledger:
+            self.ledger.set_league_path(self.code, feed_league, lid, "discovered")
+        log.info("%s: league %s -> leagueId %s", self.code, feed_league, lid)
+        return lid
 
     async def _refresh(self, league_id: str, live: bool) -> list[BookEvent]:
         """Fetch a league's games (plus its live view when live) and remember each game's markets."""

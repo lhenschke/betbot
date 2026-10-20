@@ -110,7 +110,7 @@ The dashboard also has endpoints to fix matching without editing files:
 - **Team spellings:** add to `betbot/matching/aliases/<LEAGUE>.yaml`. A league with no file still works through fuzzy matching.
 - **Bet types or periods** (e.g. `1H ATS`): add them to `bettypes` / `periods` in `bodog_markets.yaml`. Unknown types are skipped and shown on the dashboard.
 - **MyBookie (`MyB`)** is enabled in `config.example.yaml`. A PC set up before it was added needs the `MyB` block copied from there into its own `config.yaml` (the key must be `MyB`, as the feed spells it).
-  - NFL and NHL leagues are built in. For another league, open it once in capture mode: the summary shows `"leagueId": "…"` in its `leagues-lines` request. Add it to `league_ids` in `betbot/books/mybookie_markets.yaml`, or set `books.MyB.leagues: {MLB: "1234"}`.
+  - NFL, NCAAF, NHL and MLB are built in; other leagues are found by name in MyBookie's menu. If one isn't, open it in capture mode: the summary shows `"leagueId": "…"` in its `leagues-lines` request. Add a name to `league_names` in `betbot/books/mybookie_markets.yaml`, or set `books.MyB.leagues: {NBA: "1167"}`.
   - Only full-game spreads, moneylines and totals are bet. Halves and quarters are separate MyBookie leagues.
   - One-click bets go through the API for now (`one_click_mode: api`): clicking MyBookie's bet slip isn't set up yet.
   - The spread bet format is checked against a real captured bet. Moneyline and total bets use the same format, but haven't been seen in a capture yet; check the first one of each in "My Bets".
