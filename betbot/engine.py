@@ -141,6 +141,8 @@ class Engine:
                     await self.attempt(row_id, trigger="auto")
             elif v.category == BORDERLINE:
                 await self.refresh_quote(v, max_age_s=5.0)
+                if self._left_feed(v):
+                    return
                 if v.state not in ("placed", "placing"):
                     v.state = "queued"
                     await self.emit({"type": "queue", "row": v.as_dict()})
@@ -153,12 +155,22 @@ class Engine:
             self._inflight.discard(row_id)
             await self.emit({"type": "rows"})
 
+    def _left_feed(self, v: RowView) -> bool:
+        """Processing waits on the books (catalog fetches, spaced-out quotes); a row that left the
+        feed meanwhile stays "gone" rather than coming back as matched or queued."""
+        if self.poller.get(v.row.id) is not None:
+            return False
+        v.state, v.reason = "gone", "no longer in feed"
+        return True
+
     async def resolve(self, v: RowView) -> bool:
         if v.event is not None:
             return True
         adapter = self.adapters[v.row.book]
         try:
             events = await adapter.events(v.row.league, live_hint=v.row.is_live)
+            if self._left_feed(v):
+                return False
         except LeagueNotMapped as e:
             v.state, v.reason = "league_not_mapped", str(e)
             self.ledger.record_decision(v.row.id, v.row.book, v.row.league, v.row.arbsize, "unmatched", str(e))

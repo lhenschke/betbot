@@ -178,3 +178,33 @@ async def test_ignored_row_can_be_placed_by_hand(setup):
     await feed(eng, poller, arbsize=-7, sqline=2.4, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-6.5", spread=-6.5)
     res = await eng.one_click("221026-1715_OZ_NFL_NWE_CHI_ATS_-6.5")
     assert res.status.value == "rejected" and "value gone" in res.reason and len(adapter.placed) == 1
+
+
+async def test_row_that_leaves_the_feed_mid_processing_stays_gone(setup):
+    # Quotes wait behind the book's request spacing; a row removed meanwhile must not come back as
+    # "queued" (or "matched"), or clicking it only says "row no longer in the feed".
+    cfg, ledger, poller, adapter, eng = setup
+    gate = asyncio.Event()
+    real_quote, real_events = adapter.quote, adapter.events
+
+    async def slow_quote(*a, **kw):
+        await gate.wait()
+        return await real_quote(*a, **kw)
+
+    async def slow_events(*a, **kw):
+        await gate.wait()
+        return await real_events(*a, **kw)
+
+    for slow in ("quote", "events"):
+        gate.clear()
+        setattr(adapter, slow, slow_quote if slow == "quote" else slow_events)
+        eng.views.clear()
+        arb = -1 if slow == "quote" else -6  # borderline is quoted; ignored is only matched
+        await eng.on_feed(poller.diff("u", [parse_row(feed_row(arbsize=arb))], None))
+        await asyncio.sleep(0)
+        await eng.on_feed(poller.diff("u", [], None))  # the row leaves the feed mid-processing
+        gate.set()
+        await asyncio.gather(*list(eng._tasks))
+        v = next(iter(eng.views.values()))
+        assert v.state == "gone", (slow, v.state)
+        setattr(adapter, slow, real_quote if slow == "quote" else real_events)
