@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS decisions (
 CREATE TABLE IF NOT EXISTS bets (
     ts REAL, account TEXT, book TEXT, row_id TEXT, selection_key TEXT, event_id TEXT,
     description TEXT, stake REAL, decimal REAL, arbsize REAL, mode TEXT, trigger TEXT,
-    status TEXT, reference TEXT, reason TEXT, timings TEXT, dry_run INTEGER
+    status TEXT, reference TEXT, reason TEXT, timings TEXT, dry_run INTEGER, market_key TEXT
 );
 CREATE INDEX IF NOT EXISTS bets_key ON bets(account, selection_key);
 CREATE INDEX IF NOT EXISTS bets_event ON bets(account, book, event_id);
@@ -39,6 +39,11 @@ class Ledger:
         self.lock = threading.Lock()
         with self.lock:
             self.db.executescript(SCHEMA)
+            cols = {r["name"] for r in self.db.execute("PRAGMA table_info(bets)")}
+            if "market_key" not in cols:  # a ledger from before one-bet-per-market
+                self.db.execute("ALTER TABLE bets ADD COLUMN market_key TEXT")
+            self.db.execute("CREATE INDEX IF NOT EXISTS bets_market ON bets(account, market_key)")
+            self.db.commit()
 
     def _exec(self, sql: str, args: tuple = ()) -> sqlite3.Cursor:
         with self.lock:
@@ -62,17 +67,26 @@ class Ledger:
                    event_id: str, description: str, stake: float, decimal: float | None,
                    arbsize: float | None, mode: str, trigger: str, status: str,
                    reference: str | None, reason: str | None, timings: dict[str, float],
-                   dry_run: bool) -> None:
-        self._exec("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   dry_run: bool, market_key: str = "") -> None:
+        self._exec("INSERT INTO bets (ts, account, book, row_id, selection_key, event_id, description, stake, "
+                   "decimal, arbsize, mode, trigger, status, reference, reason, timings, dry_run, market_key) "
+                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                    (time.time(), account, book, row_id, selection_key, event_id, description,
                     stake, decimal, arbsize, mode, trigger, status, reference, reason,
-                    json.dumps(timings), int(dry_run)))
+                    json.dumps(timings), int(dry_run), market_key))
 
     def already_bet(self, account: str, selection_key: str, include_dry_run: bool = False) -> bool:
-        sql = "SELECT 1 FROM bets WHERE account=? AND selection_key=? AND status IN (?,?)"
+        return self._bet_on("selection_key", account, selection_key, include_dry_run)
+
+    def already_bet_market(self, account: str, market_key: str, include_dry_run: bool = False) -> bool:
+        """Whether this game's spread (or moneyline, or total) for this period was bet, on any line."""
+        return self._bet_on("market_key", account, market_key, include_dry_run)
+
+    def _bet_on(self, column: str, account: str, key: str, include_dry_run: bool) -> bool:
+        sql = f"SELECT 1 FROM bets WHERE account=? AND {column}=? AND status IN (?,?)"
         if not include_dry_run:
             sql += " AND dry_run=0"
-        return bool(self._all(sql + " LIMIT 1", (account, selection_key, *LIVE_STATUSES)))
+        return bool(self._all(sql + " LIMIT 1", (account, key, *LIVE_STATUSES)))
 
     def event_exposure(self, account: str, book: str, event_id: str) -> float:
         r = self._all("SELECT COALESCE(SUM(stake),0) s FROM bets WHERE account=? AND book=? "

@@ -9,6 +9,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 PlaceMode = Literal["api", "ui"]
+StakeMode = Literal["fixed", "max"]
 
 
 class Thresholds(BaseModel):
@@ -20,6 +21,7 @@ class Thresholds(BaseModel):
 
 
 class StakeConfig(BaseModel):
+    mode: StakeMode = "fixed"      # fixed = `default` (or the book's stake); max = the most the book will take
     default: float = 50.0
     round_to: float = 5.0          # a stake cut down by a limit is rounded down to a "nice" multiple of this
     min_stake: float = 5.0         # and skipped if the limit leaves less; your own stake is placed as set
@@ -42,6 +44,12 @@ class ActiveHours(BaseModel):
     start: str = "08:00"
     end: str = "23:59"
     timezone: str = "America/Vancouver"
+
+
+class OnlyConfig(BaseModel):
+    """Narrow what is bet (and shown) to a slice of the feeds."""
+    leagues: list[str] = Field(default_factory=list)  # e.g. [ATP, WTA]; empty = every league in feeds
+    live: bool = False                                 # true = live (in-play) games only
 
 
 class HumanConfig(BaseModel):
@@ -106,6 +114,8 @@ class Config(BaseModel):
     stake: StakeConfig = StakeConfig()
     pacing: Pacing = Pacing()
     human: HumanConfig = HumanConfig()
+    only: OnlyConfig = OnlyConfig()
+    one_bet_per_market: bool = True  # per game, at most one spread, one moneyline and one total (each period)
     books: dict[str, BookConfig] = Field(default_factory=lambda: {
         "OZ": BookConfig(base_url="https://www.ozoon.eu"),
     })

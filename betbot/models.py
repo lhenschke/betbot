@@ -75,6 +75,10 @@ class BookEvent:
         return next((c for c in self.competitors if c.id == competitor_id), None)
 
 
+# What kind of market a bet-type rule picks, by the feed field it takes its line from.
+MARKET_TYPE = {"spread": "spread", "total": "total", "none": "moneyline"}
+
+
 @dataclass
 class Selection:
     """A single bettable outcome at a book, with the price seen at quote time."""
@@ -92,6 +96,7 @@ class Selection:
     handicap: float | None
     is_open: bool
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    market_type: str = ""  # spread, moneyline or total
 
     @property
     def label(self) -> str:
@@ -107,6 +112,11 @@ class Selection:
         """Identifies 'the same bet' for dedupe, regardless of price."""
         line = "" if self.handicap is None else f"{self.handicap:g}"
         return f"{self.book}:{self.event.id}:{self.market_description}:{self.period}:{self.outcome_description}:{line}"
+
+    @property
+    def market_key(self) -> str:
+        """Identifies 'this game's spread' (or moneyline, or total) for this period, whatever the line or side."""
+        return f"{self.book}:{self.event.id}:{self.market_type or self.market_description}:{self.period}"
 
 
 class BetStatus(str, Enum):

@@ -29,7 +29,7 @@
   button { font:inherit; padding:4px 10px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); cursor:pointer; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   button.danger { background:var(--bad); border-color:var(--bad); color:#fff; }
-  input[type=number] { width:80px; font:inherit; padding:3px 6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); }
+  input[type=number], input[type=text] { width:80px; font:inherit; padding:3px 6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); }
   label { display:inline-flex; gap:6px; align-items:center; color:var(--muted); }
   .queue { display:grid; gap:8px; }
   .card { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
@@ -47,6 +47,10 @@
   <label><input type="checkbox" id="auto"> Auto betting</label>
   <label><input type="checkbox" id="dry"> Dry run</label>
   <label>Stake <input type="number" id="stake" step="5" min="0"></label>
+  <label title="Bet the most the book will take (within your caps)"><input type="checkbox" id="stake_max"> Max</label>
+  <label title="At most one spread, one moneyline and one total per game"><input type="checkbox" id="one_per_market"> 1 per market</label>
+  <label title="Comma-separated, e.g. ATP, WTA. Empty = all leagues">Leagues <input type="text" id="only_leagues" placeholder="all"></label>
+  <label><input type="checkbox" id="only_live"> Live only</label>
   <label>Auto ≥ <input type="number" id="auto_min" step="1"></label>
   <label>Queue ≥ <input type="number" id="borderline_min" step="1"></label>
   <button class="danger" id="kill">Stop auto</button>
@@ -110,6 +114,9 @@ function render() {
   if (!editing) {
     $("auto").checked = s.auto_enabled; $("dry").checked = s.dry_run; $("stake").value = s.stake;
     $("auto_min").value = s.auto_min; $("borderline_min").value = s.borderline_min;
+    $("stake_max").checked = s.stake_mode === "max"; $("stake").disabled = s.stake_mode === "max";
+    $("one_per_market").checked = s.one_bet_per_market; $("only_live").checked = s.only_live;
+    $("only_leagues").value = (s.only_leagues || []).join(", ");
   }
   $("books").innerHTML = Object.entries(state.books).map(([code, b]) => {
     const cls = !b.enabled ? "" : b.paused ? "bad" : b.logged_in === false ? "warn" : "good";
@@ -172,6 +179,15 @@ for (const id of ["stake", "auto_min", "borderline_min"]) {
   $(id).addEventListener("change", async () => { editing = false; await post("/api/settings", {[id]: Number($(id).value)}); load(); });
 }
 $("auto").addEventListener("change", () => post("/api/settings", {auto_enabled: $("auto").checked}).then(load));
+$("stake_max").addEventListener("change", () =>
+  post("/api/settings", {stake_mode: $("stake_max").checked ? "max" : "fixed"}).then(load));
+$("one_per_market").addEventListener("change", () =>
+  post("/api/settings", {one_bet_per_market: $("one_per_market").checked}).then(load));
+$("only_live").addEventListener("change", () => post("/api/settings", {only_live: $("only_live").checked}).then(load));
+$("only_leagues").addEventListener("focus", () => editing = true);
+$("only_leagues").addEventListener("change", async () => {
+  editing = false; await post("/api/settings", {only_leagues: $("only_leagues").value}); load();
+});
 $("dry").addEventListener("change", () => {
   if (!$("dry").checked && !confirm("Turn off dry run? Real bets will be placed.")) { $("dry").checked = true; return; }
   post("/api/settings", {dry_run: $("dry").checked}).then(load);

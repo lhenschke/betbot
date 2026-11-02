@@ -29,7 +29,7 @@ from typing import Any
 import yaml
 
 from .. import human
-from ..models import ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
+from ..models import MARKET_TYPE, ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
 from ..matching.teams import normalize
 from ..odds import cents
 from .base import BookAdapter, LeagueNotMapped, UiNotReady, register
@@ -150,7 +150,8 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
                     market_description=f"{dg.get('description', '')} / {desc}", period=period,
                     outcome_id=str(o["id"]), outcome_description=o.get("description", ""),
                     price_id=str(price["id"]), decimal=dec, american=str(price.get("american", "")),
-                    handicap=hcap, is_open=is_open, raw={"market": m, "outcome": o}))
+                    handicap=hcap, is_open=is_open, raw={"market": m, "outcome": o},
+                    market_type=MARKET_TYPE[rule["line"]]))
     if found:
         # The same team and line can be offered more than once (main and alternate lines, and live
         # markets like "rest of game"): take the one priced closest to what the feed saw.
@@ -286,6 +287,13 @@ class BodogAdapter(BookAdapter):
         if status >= 400:
             raise RuntimeError(f"GET {path} -> HTTP {status}")
         return data
+
+    async def book_max_stake(self, sel: Selection) -> float | None:
+        """The most the book will take on this selection right now, as its bet slip works it out."""
+        if not self.browser:
+            return None
+        headers = await self._session_headers()
+        return await self.max_stake(sel, await self.suggestion(sel, headers), headers)
 
     async def _nav_leagues(self) -> list[dict[str, Any]]:
         if self._nav is not None:

@@ -33,7 +33,7 @@ import yaml
 from .. import human, odds
 from ..browser import _visible
 from ..matching.teams import normalize
-from ..models import ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
+from ..models import MARKET_TYPE, ArbRow, BetResult, BetStatus, BookEvent, Competitor, Selection
 from .base import BookAdapter, LeagueNotMapped, UiNotReady, register
 from .bodog import _f, parse_bettype
 
@@ -192,7 +192,7 @@ def find_selection(event: BookEvent, game: dict[str, Any], row: ArbRow, team: Co
             price_id=str(o["odd"]), decimal=dec, american=f"{int(_f(o['odd'])):+d}",
             handicap=point if rule["line"] != "none" else None,
             is_open=bool(m.get("isActive")) and m.get("status") == 1 and o.get("active") == 1,
-            raw={"game": game, "market": m, "outcome": o}), "ok"
+            raw={"game": game, "market": m, "outcome": o}, market_type=MARKET_TYPE[rule["line"]]), "ok"
     if seen_lines:
         return None, f"line {want_line:g} not offered (book has {', '.join(sorted(set(seen_lines)))})"
     return None, f"no {want_kind} outcome in the {rule['market']} market"
@@ -405,6 +405,18 @@ class MyBookieAdapter(BookAdapter):
             if game is None or ts < asked:
                 return None, "event no longer listed"
         return find_selection(event, game, row, team, self.rules)
+
+    async def book_max_stake(self, sel: Selection) -> float | None:
+        """The most the book will take on this selection right now, from the bet slip's own check."""
+        if not self.browser:
+            return None
+        status, opts = await self._post(OPTIONS, build_options_payload(sel))
+        if status in (401, 419):
+            raise PermissionError("session expired")
+        try:
+            return max_risk(opts["content"][0]["selections"][0])
+        except (KeyError, IndexError, TypeError):
+            return None
 
     # ----- betting through the site's API, inside the page ----------------
     async def place_api(self, sel: Selection, stake: float, dry_run: bool) -> BetResult:

@@ -31,13 +31,14 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
    - the **price is verified once, in the bet slip**: the bet is placed only if the slip offers at least the price the feed saw at the book, so a price that has moved against you is refused there, not guessed at from a separate odds fetch.
    - automatic live bets wait while the feed itself has stopped updating (its `runtime` hasn't moved for `max_live_age_s`). A row's own `date` is when its prices last changed, so a steady line isn't treated as stale. Bets you click skip this check.
 4. **Stake.** The lowest of:
-   - your stake;
+   - your stake, or with `stake.mode: max` (the dashboard's **Max** box) the most the book will take on that bet right now, as its own bet slip works it out. If the book doesn't say, the feed's `book_limit` is used; with neither, the bet is skipped. Max mode also stays within your balance;
    - the feed's `book_limit`;
    - the book's max stake;
-   - the per-event and daily caps.
+   - the per-event and daily caps (raise these for max mode, or they become the stake).
 
    Your stake is placed exactly as you set it. Only when one of the limits cuts it down is it rounded down to a "nice" multiple of `round_to` (never to zero), and skipped if the limit leaves less than `min_stake`.
-5. **Place.** The bet is placed at the exact price that was checked, so the book rejects it if the line moved in the meantime. A price, spread or total change is re-quoted once and retried only if it still qualifies.
+5. **One bet per market.** With `one_bet_per_market: true` (the default; the dashboard's **1 per market** box), each game gets at most one spread, one moneyline and one total per account, whatever the line or side. Each period counts separately, so a first-half spread is its own market. When a game shows several lines at once, the one with the best arbsize goes first.
+6. **Place.** The bet is placed at the exact price that was checked, so the book rejects it if the line moved in the meantime. A price, spread or total change is re-quoted once and retried only if it still qualifies.
    - **Mouse (`ui` mode, ~3–5s), the default for automatic and one-click bets:** the bot clicks the outcome with a curved mouse path, types the stake, and clicks Place. If a page element can't be found before Place is clicked, the bet is skipped with the reason shown; it never switches to the API by itself.
    - **API (`api` mode, ~1–2s):** the event is put on screen, then the same calls the site's bet slip makes are run from inside the page. Used only when you pick it: the **Fast** button on a queued row, or `api` mode for a book.
    - Switch a book's modes by clicking `auto=` or `click=` in its status on the dashboard (saved to `config.yaml`).
@@ -83,6 +84,32 @@ Steps 1 and 2 confirm two things this code couldn't test directly: the bet reque
 2. **Dry run.** Watch the dashboard for a while. Queued and auto rows should show the right OZ selection, and "Recent bets" should list "(dry)" entries.
 3. **One real minimum bet.** Untick **Dry run**, set **Stake** to the minimum, and press **Place** on a queued row. Check it in Ozoon's "My Bets".
 4. **Then auto,** with a small stake and tight caps, raising them as you gain confidence.
+
+## Narrowing what it bets
+
+All of these are in `config.yaml`, and all but the books can be changed live on the dashboard.
+
+- **One book only:** set `enabled: false` on the others under `books:` (e.g. `books.MyB.enabled: false` for Ozoon only).
+- **Some leagues only:** `only.leagues: [ATP, WTA]` (the dashboard's **Leagues** box: `ATP, WTA`). Empty means every league in `feeds:`. Rows outside the list aren't shown or bet.
+- **Live games only:** `only.live: true` (the **Live only** box).
+- **The biggest bet the book allows:** `stake.mode: max` (the **Max** box).
+- **One bet per market:** `one_bet_per_market: true` (the **1 per market** box).
+
+For example, live tennis at Ozoon only, at the maximum, once per market:
+
+```yaml
+only:
+  leagues: [ATP, WTA]
+  live: true
+one_bet_per_market: true
+stake:
+  mode: max
+  max_per_event: 5000     # the cap per game, across its spread, moneyline and total
+  daily_cap: 20000
+books:
+  MyB:
+    enabled: false
+```
 
 ## Dashboard
 

@@ -66,6 +66,10 @@ class BookAdapter(ABC):
     async def place_ui(self, sel: Selection, stake: float, dry_run: bool) -> BetResult:
         ...
 
+    async def book_max_stake(self, sel: Selection) -> float | None:
+        """The most the book will take on this selection now (for stake mode "max"); None if unknown."""
+        return None
+
     async def is_logged_in(self) -> bool:
         return self.browser is not None and await self.browser.is_logged_in()
 

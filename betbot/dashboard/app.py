@@ -68,6 +68,17 @@ def create_app(engine: Engine, updater: "Updater | None" = None) -> FastAPI:
             cfg.auto_enabled = bool(body["auto_enabled"])
         if "stake" in body:
             cfg.stake.default = float(body["stake"])
+        if body.get("stake_mode") in ("fixed", "max"):
+            cfg.stake.mode = body["stake_mode"]
+        if "one_bet_per_market" in body:
+            cfg.one_bet_per_market = bool(body["one_bet_per_market"])
+        refilter = False
+        if "only_live" in body:
+            cfg.only.live, refilter = bool(body["only_live"]), True
+        if "only_leagues" in body:
+            raw = body["only_leagues"]
+            items = raw.split(",") if isinstance(raw, str) else raw
+            cfg.only.leagues, refilter = [str(x).strip().upper() for x in items if str(x).strip()], True
         if "auto_min" in body:
             cfg.thresholds.auto_min = float(body["auto_min"])
         if "borderline_min" in body:
@@ -90,6 +101,8 @@ def create_app(engine: Engine, updater: "Updater | None" = None) -> FastAPI:
                 engine.books[code].rejections_in_row = 0
         for v in engine.views.values():
             v.category = engine.classify(v.row.arbsize)
+        if refilter:
+            await engine.refilter()
         engine.save_config()
         await engine.emit({"type": "rows"})
         return JSONResponse(engine.state()["settings"])

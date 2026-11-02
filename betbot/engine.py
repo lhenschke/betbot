@@ -82,6 +82,7 @@ class Engine:
         self._inflight: set[str] = set()
         self._tasks: set[asyncio.Task] = set()
         self._idle: dict[str, asyncio.Future] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
 
     # ----- plumbing -----------------------------------------------------------
     async def emit(self, msg: dict[str, Any]) -> None:
@@ -112,14 +113,32 @@ class Engine:
         bc = self.cfg.books.get(book)
         return bool(bc and bc.enabled and book in self.adapters)
 
+    def wanted(self, row: ArbRow) -> bool:
+        """Whether the row is in the slice set under `only:` (leagues, live games only)."""
+        only = self.cfg.only
+        if only.leagues and row.league.upper() not in {lg.strip().upper() for lg in only.leagues}:
+            return False
+        return row.is_live or not only.live
+
+    async def refilter(self) -> None:
+        """Apply changed `only:` settings to what's on screen: drop rows now left out (unless bet),
+        and pick up feed rows now let in."""
+        for rid, v in list(self.views.items()):
+            if not self.wanted(v.row) and v.state != "placed":
+                del self.views[rid]
+        fresh = [r for r in self.poller.current().values() if r.id not in self.views]
+        if fresh:
+            await self.on_feed(FeedUpdate(feed_url="", added=fresh))
+
     # ----- feed updates -------------------------------------------------------
     async def on_feed(self, upd: FeedUpdate) -> None:
         for row in upd.removed:
             v = self.views.get(row.id)
             if v and v.state not in ("placed",):
                 v.state, v.reason, v.updated = "gone", "no longer in feed", time.time()
-        for row in upd.added + upd.changed:
-            if not self.book_enabled(row.book):
+        # Best value first, so with one bet per market the best line of a game is the one taken.
+        for row in sorted(upd.added + upd.changed, key=lambda r: -r.arbsize):
+            if not self.book_enabled(row.book) or not self.wanted(row):
                 continue
             cat = self.classify(row.arbsize)
             v = self.views.get(row.id)
@@ -222,12 +241,25 @@ class Engine:
             return "pacing: per-hour limit"
         return None
 
-    def stake_for(self, row: ArbRow, sel: Selection) -> tuple[float, str]:
+    def stake_for(self, row: ArbRow, sel: Selection, book_max: float | None = None) -> tuple[float, str]:
         """Your stake, exactly as set. Only when a limit cuts it down is the result rounded down to a
-        multiple of round_to (never to nothing) and held to min_stake (in attempt)."""
+        multiple of round_to (never to nothing) and held to min_stake (in attempt).
+
+        In stake mode "max" there is no stake of your own: the bet is the most the book takes right now
+        (book_max, from its bet slip, else the feed's book_limit), within the caps and your balance."""
         sc = self.cfg.stake
         acct = self.account(row.book)
-        caps = {"stake": self.cfg.stake_for(row.book)}
+        caps: dict[str, float] = {}
+        if sc.mode == "max":
+            if book_max:
+                caps["book max"] = book_max
+            elif not row.book_limit:
+                return 0.0, "book max unknown"
+            balance = self.books[row.book].balance if row.book in self.books else None
+            if balance is not None:
+                caps["balance"] = balance
+        else:
+            caps["stake"] = self.cfg.stake_for(row.book)
         if row.book_limit:
             caps["book limit"] = row.book_limit
         caps["event cap"] = sc.max_per_event - self.ledger.event_exposure(acct, row.book, sel.event.id)
@@ -263,6 +295,8 @@ class Engine:
         latest = self.poller.get(row_id)
         if latest is None:
             return self._skip(v, "row no longer in the feed")
+        if not self.wanted(latest):
+            return self._skip(v, "left out by the leagues / live-only setting")
         age_limit = th.max_live_age_s if latest.is_live else th.max_prematch_age_s
         feed_age = self.poller.feed_age(latest.feed_url)
         # Only automatic bets wait for a live feed; a bet you click is re-quoted at the book and placed.
@@ -274,7 +308,8 @@ class Engine:
             await asyncio.sleep(max(0.0, self.cfg.pacing.min_gap_s - (time.time() - st.last_bet_ts)))
 
         browser = adapter.browser
-        lock = browser.lock if browser else asyncio.Lock()
+        # One bet at a time per book, so checks like one-bet-per-market see the bet before.
+        lock = browser.lock if browser else self._locks.setdefault(book, asyncio.Lock())
         self._stop_idle(book)
         async with lock:
             v.state = "placing"
@@ -296,10 +331,21 @@ class Engine:
                 if self.ledger.already_bet(acct, sel.key, include_dry_run=self.cfg.dry_run):
                     v.state, v.reason = "placed", "already bet this selection"
                     return BetResult(BetStatus.REJECTED, 0, reason=v.reason)
+                if self.cfg.one_bet_per_market and self.ledger.already_bet_market(
+                        acct, sel.market_key, include_dry_run=self.cfg.dry_run):
+                    kind = sel.market_type or "market"
+                    return self._skip(v, f"already bet this game's {kind}" + ("" if sel.period == "G" else
+                                                                              f" ({sel.period})"))
                 if (auto and self.cfg.pacing.skip_marginal_pct and round(v.live_arbsize) <= th.auto_min
                         and random.random() < self.cfg.pacing.skip_marginal_pct):
                     return self._skip(v, "randomly skipped marginal bet (pacing)")
-                stake, limit_name = self.stake_for(latest, sel)
+                try:
+                    book_max = await adapter.book_max_stake(sel) if self.cfg.stake.mode == "max" else None
+                except PermissionError as e:
+                    st.logged_in = False
+                    self._spawn(self.ensure_login(book))
+                    return self._skip(v, f"login needed: {e}")
+                stake, limit_name = self.stake_for(latest, sel, book_max)
                 if stake <= 0 or (limit_name != "stake" and stake < self.cfg.stake.min_stake):
                     return self._skip(v, f"{limit_name} leaves only {stake:g}, below min_stake "
                                          f"{self.cfg.stake.min_stake:g}")
@@ -336,7 +382,7 @@ class Engine:
             event_id=sel.event.id, description=f"{sel.event.description}: {sel.label} ({sel.market_description})",
             stake=result.stake, decimal=result.decimal, arbsize=v.live_arbsize, mode=mode, trigger=trigger,
             status=status, reference=result.reference, reason=result.reason, timings=result.timings,
-            dry_run=result.status == BetStatus.DRY_RUN)
+            dry_run=result.status == BetStatus.DRY_RUN, market_key=sel.market_key)
         now = time.time()
         if result.status in (BetStatus.ACCEPTED, BetStatus.DRY_RUN):
             v.state = "placed"
@@ -453,7 +499,10 @@ class Engine:
             "feeds": [{"url": u, "ok": u not in self.poller.errors, "error": self.poller.errors.get(u),
                        "last_ok": self.poller.last_ok.get(u)} for u in self.poller.urls],
             "settings": {"dry_run": self.cfg.dry_run, "auto_enabled": self.cfg.auto_enabled,
-                         "stake": self.cfg.stake.default, "auto_min": self.cfg.thresholds.auto_min,
-                         "borderline_min": self.cfg.thresholds.borderline_min},
+                         "stake": self.cfg.stake.default, "stake_mode": self.cfg.stake.mode,
+                         "auto_min": self.cfg.thresholds.auto_min,
+                         "borderline_min": self.cfg.thresholds.borderline_min,
+                         "only_leagues": self.cfg.only.leagues, "only_live": self.cfg.only.live,
+                         "one_bet_per_market": self.cfg.one_bet_per_market},
             "bets": self.ledger.recent_bets(50),
         }

@@ -223,6 +223,7 @@ async def test_row_that_leaves_the_feed_mid_processing_stays_gone(setup):
 
 async def test_your_stake_is_placed_exactly_as_set(setup):
     cfg, ledger, poller, adapter, eng = setup
+    cfg.one_bet_per_market = False  # two lines of the same spread here
     cfg.stake.default, adapter.decimal = 2, 2.7  # below round_to and min_stake: still placed as set
     await feed(eng, poller, arbsize=2)
     assert [stake for _, stake, _ in adapter.placed] == [2]
@@ -234,6 +235,7 @@ async def test_your_stake_is_placed_exactly_as_set(setup):
 
 async def test_a_limit_that_cuts_the_stake_is_rounded_but_not_to_nothing(setup):
     cfg, ledger, poller, adapter, eng = setup
+    cfg.one_bet_per_market = False  # three lines of the same spread here
     adapter.decimal = 2.7
     await feed(eng, poller, arbsize=2, book_limit=38)  # the feed's book limit: 38 -> 35
     await feed(eng, poller, arbsize=2, book_limit=7, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-4", spread=-4)  # 7 -> 5
@@ -264,3 +266,134 @@ async def test_skipped_automatic_row_can_be_placed_by_hand(setup):
     cfg.auto_enabled = True
     res = await eng.one_click(v.row.id)  # but can still be placed by hand
     assert res.status.value == "dry_run" and len(adapter.placed) == 1
+
+
+# ----- narrowing: leagues, live only, one bet per market, max stake ---------------------------------
+
+LIVE_ATP = dict(id="021126-0740_OZ_ATP LIVE_machac t_jacquet k_ATS_1.5", league="ATP LIVE", livetime="LIVE",
+                sq_team="Chicago Bears", spread=1.5)
+
+
+async def test_only_live_tennis(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    cfg.only.leagues, cfg.only.live = ["ATP", "WTA"], True
+    await feed(eng, poller, arbsize=2)  # pre-game NFL: left out
+    assert eng.views == {} and adapter.placed == []
+    await feed(eng, poller, arbsize=2, **{**LIVE_ATP, "league": "NFL LIVE",
+                                          "id": "191026-2015_OZ_NFL LIVE_NWE_CHI_ATS_1.5"})  # live, not tennis
+    assert eng.views == {} and adapter.placed == []
+    await feed(eng, poller, arbsize=2, **LIVE_ATP)
+    assert len(adapter.placed) == 1
+
+
+async def test_changing_the_filter_refreshes_what_is_shown(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    cfg.auto_enabled = False
+    await feed(eng, poller, arbsize=2)
+    assert len(eng.views) == 1
+    cfg.only.live = True
+    await eng.refilter()
+    assert eng.views == {}
+    cfg.only.live = False
+    await eng.refilter()
+    await asyncio.gather(*list(eng._tasks))
+    assert len(eng.views) == 1
+
+
+async def test_one_bet_per_market(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    await feed(eng, poller, arbsize=3)  # Bears -5
+    await feed(eng, poller, arbsize=2, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-4", spread=-4)  # same game's spread
+    assert len(adapter.placed) == 1
+    v = eng.views["221026-1715_OZ_NFL_NWE_CHI_ATS_-4"]
+    assert v.state == "skipped" and v.reason == "already bet this game's market"
+    # a total on the same game is a different market
+    real_quote = adapter.quote
+
+    async def quote_total(event, row, team, max_age_s=0.0):
+        sel, why = await real_quote(event, row, team, max_age_s)
+        sel.market_type, sel.market_description, sel.outcome_description = "total", "Total", "Over"
+        return sel, why
+
+    adapter.quote = quote_total
+    await feed(eng, poller, arbsize=2, id="221026-1715_OZ_NFL_NWE_CHI_Over_44.5", bettype="Over", spread="None",
+               total=44.5)
+    assert len(adapter.placed) == 2
+
+
+async def test_best_line_of_a_game_goes_first(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    rows = [parse_row(feed_row(arbsize=a, id=f"221026-1715_OZ_NFL_NWE_CHI_ATS_{s}", spread=s))
+            for a, s in ((2, -4), (5, -5))]
+    await eng.on_feed(poller.diff("u", rows, None))
+    await asyncio.gather(*list(eng._tasks))
+    assert [sel.handicap for sel, _, _ in adapter.placed] == [-5]
+
+
+async def test_max_stake_takes_what_the_book_allows(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    cfg.stake.mode, cfg.stake.max_per_event, cfg.stake.daily_cap = "max", 100000, 100000
+
+    async def book_max(sel):
+        return 1056.0
+
+    adapter.book_max_stake = book_max
+    await feed(eng, poller, arbsize=2, book_limit=5000)
+    assert [stake for _, stake, _ in adapter.placed] == [1055]  # rounded down to round_to
+
+
+async def test_max_stake_within_caps_and_balance(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    cfg.stake.mode = "max"
+
+    async def book_max(sel):
+        return 1056.0
+
+    adapter.book_max_stake = book_max
+    eng.books["OZ"].balance = 312.4
+    await feed(eng, poller, arbsize=2, book_limit=5000)
+    assert [stake for _, stake, _ in adapter.placed] == [310]  # balance below the 500 event cap
+
+
+async def test_max_stake_falls_back_to_the_feed_limit(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    cfg.stake.mode = "max"
+
+    async def book_max(sel):
+        return None
+
+    adapter.book_max_stake = book_max
+    await feed(eng, poller, arbsize=2, book_limit="None")  # nothing to go on: not bet
+    assert adapter.placed == [] and next(iter(eng.views.values())).reason.startswith("book max unknown")
+    await feed(eng, poller, arbsize=2, book_limit=250, id="221026-1715_OZ_NFL_NWE_CHI_ATS_-4", spread=-4)
+    assert [stake for _, stake, _ in adapter.placed] == [250]
+
+
+def test_old_ledger_gets_the_market_column(tmp_path):
+    import sqlite3
+    p = tmp_path / "old.sqlite3"
+    db = sqlite3.connect(p)
+    db.execute("CREATE TABLE bets (ts REAL, account TEXT, book TEXT, row_id TEXT, selection_key TEXT, event_id TEXT, "
+               "description TEXT, stake REAL, decimal REAL, arbsize REAL, mode TEXT, trigger TEXT, status TEXT, "
+               "reference TEXT, reason TEXT, timings TEXT, dry_run INTEGER)")
+    db.commit()
+    db.close()
+    ledger = Ledger(p)
+    ledger.record_bet(account="me", book="OZ", row_id="r", selection_key="k", event_id="e", description="d",
+                      stake=5, decimal=2.0, arbsize=1, mode="ui", trigger="auto", status="accepted", reference="R",
+                      reason=None, timings={}, dry_run=False, market_key="OZ:e:spread:G")
+    assert ledger.already_bet_market("me", "OZ:e:spread:G")
+    assert not ledger.already_bet_market("me", "OZ:e:total:G")
+
+
+def test_dashboard_settings(setup):
+    from fastapi.testclient import TestClient
+
+    from betbot.dashboard.app import create_app
+    cfg, ledger, poller, adapter, eng = setup
+    client = TestClient(create_app(eng))
+    s = client.post("/api/settings", json={"stake_mode": "max", "only_live": True, "only_leagues": "atp, wta",
+                                           "one_bet_per_market": False}).json()
+    assert (s["stake_mode"], s["only_live"], s["only_leagues"], s["one_bet_per_market"]) == \
+        ("max", True, ["ATP", "WTA"], False)
+    assert cfg.stake.mode == "max" and cfg.only.leagues == ["ATP", "WTA"]

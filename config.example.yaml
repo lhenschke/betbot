@@ -22,11 +22,19 @@ thresholds:
   max_live_age_s: 15       # no automatic live bets while the feed hasn't updated for this many seconds
   max_prematch_age_s: 0    # the same for pre-match rows (0 = off)
 
+# Narrow what is bet (and shown) to a slice of the feeds. Turn a whole book off with books.<code>.enabled.
+only:
+  leagues: []              # e.g. [ATP, WTA] for tennis only; empty = every league in feeds
+  live: false              # true = live (in-play) games only, nothing pre-game
+
+one_bet_per_market: true   # per game, at most one spread, one moneyline and one total (per period, e.g. 1H)
+
 stake:
+  mode: fixed              # fixed = bet `default`; max = the most the book will take on each bet (within the caps below)
   default: 50
   round_to: 5              # your stake is placed as set; a stake cut down by a limit is rounded down to this
   min_stake: 5             # ...and skipped if a limit leaves less than this
-  max_per_event: 500       # total staked on one game, per account
+  max_per_event: 500       # total staked on one game, per account (raise it for mode: max)
   daily_cap: 5000
 
 pacing:
