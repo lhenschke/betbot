@@ -1,5 +1,6 @@
 """betbot command line.
 
+  betbot setup               first-time questions: books, what to bet, stake, logins -> config.yaml
   betbot run                 start the bot (browser per enabled book + dashboard)
   betbot run --no-browser    read-only: match and quote rows, no betting
   betbot check               one pass over the feeds, print how each row matches at each book
@@ -153,9 +154,14 @@ def main() -> None:
     cp.add_argument("book")
     cp.add_argument("--minutes", type=float, default=10)
     sub.add_parser("init")
+    sub.add_parser("setup")
     args = ap.parse_args()
 
     config_path = Path(args.config)
+    if args.cmd == "setup":
+        from . import setup_wizard
+        setup_wizard.run(config_path)
+        return
     if args.cmd == "init":
         example = Path(__file__).resolve().parent.parent / "config.example.yaml"
         if config_path.exists():

@@ -9,11 +9,13 @@ if not exist .venv (
 )
 if not exist config.yaml (
   .venv\Scripts\python -m pip install -q -e .
-  copy config.example.yaml config.yaml >nul
-  echo Created config.yaml - set your account label, then run:  set-credentials.bat
-  notepad config.yaml
-  pause
-  exit /b
+  rem First run: a few questions (books, what to bet, stake, logins) write config.yaml.
+  .venv\Scripts\python -m betbot setup
+  if not exist config.yaml (
+    echo Setup didn't finish. Double-click run.bat to try again.
+    pause
+    exit /b
+  )
 )
 start "" http://127.0.0.1:8765
 

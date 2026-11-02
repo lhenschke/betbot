@@ -49,20 +49,29 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
 
 ## Setup on each Windows PC
 
-1. Install **Python 3.12 or newer** (python.org, tick "Add to PATH"; the Microsoft Store version also works), **Google Chrome**, and **Git for Windows** (<https://git-scm.com/download/win>, default options).
-2. Get the code with Git, not a ZIP, so it can update itself. In a Command Prompt, in the folder you want it in:
+1. Open **PowerShell**: click Start, type `powershell`, press Enter.
+2. Paste this line and press Enter:
    ```
-   git clone -b claude/magical-keller-l3f7qy https://github.com/lhenschke/betbot.git
+   irm https://raw.githubusercontent.com/lhenschke/betbot/claude/eager-hypatia-jf6af6/install.ps1 | iex
    ```
-   For a private repo, a GitHub sign-in window appears the first time; sign in once and Windows remembers it.
-3. Double-click **`run.bat`**. The first time, it installs everything, creates `config.yaml` and opens it.
-   - Set `books.OZ.account` to a label for this PC's account, e.g. `lee-desktop`.
-   - Do the same for `books.MyB`, or set its `enabled: false` if this PC has no MyBookie account.
-4. Double-click **`set-credentials.bat`**, type the book (`OZ` or `MyB`), and enter its email and password. Do it once per book. They are stored in **Windows Credential Manager**, never in a file.
-5. Double-click **`run.bat`** again.
-   - A Chrome window opens on Ozoon, and the dashboard opens at <http://127.0.0.1:8765>.
+   It installs whatever is missing (Python, Git, Google Chrome; Windows may ask permission, click **Yes**), downloads BetBot to `C:\Users\<you>\BetBot`, and asks a few questions:
+   - a name for this PC's account (any label);
+   - which sportsbooks: Ozoon, MyBookie or both;
+   - what to bet: everything, live tennis only, or all tennis;
+   - the stake (an amount, or `max` for the most the book takes), and the most per game and per day;
+   - one bet per market or not;
+   - your login for each book. It's stored in **Windows Credential Manager**, never in a file.
+3. It adds a **BetBot** shortcut to the desktop and starts it.
+   - A Chrome window opens on the sportsbook, and the dashboard opens at <http://127.0.0.1:8765>.
    - The bot logs in by itself. If a captcha, 2FA code or device check appears, it pauses betting and alerts you: finish the login in the Chrome window and it carries on.
-6. Leave Chrome open; minimizing it is fine. The bot doesn't use the PC's mouse or keyboard except inside that Chrome window, and only in `ui` mode.
+   - It starts in **dry run**. Untick **Dry run** on the dashboard when you're ready for real bets.
+4. Leave Chrome open; minimizing it is fine. The bot doesn't use the PC's mouse or keyboard except inside that Chrome window, and only in `ui` mode.
+
+After that:
+
+- **Start it** with the BetBot shortcut (or `run.bat`).
+- **Change the answers** with `setup.bat`, or live on the dashboard. A new login: `set-credentials.bat`.
+- **Install it the long way** if you'd rather: install Python 3.12+, Git and Chrome, `git clone -b claude/eager-hypatia-jf6af6 https://github.com/lhenschke/betbot.git`, then double-click `run.bat`. It asks the same questions the first time.
 
 Each PC keeps its own `config.yaml`, `data/` (ledger, logs, aliases added from the dashboard) and `profiles/` (Chrome profile), so several PCs with different accounts run independently. None of these are in Git, so updates never touch them.
 
