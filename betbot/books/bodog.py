@@ -48,6 +48,10 @@ DEFAULT_SELECTORS = {
     "single_card": '[data-testid="betslip-collapsible-{outcome_id}"]',
     "stake_input": '[data-testid="betslip-container"] .ol-text__externalContainer:has-text("Stake") input',
     "place_button": '[data-testid="betslip-container"] button:has-text("Place Bet")',
+    # Fills in the most you can bet. Its exact markup hasn't been captured yet, so this takes any visible
+    # clickable thing in the slip whose whole text is Max / Max Bet / Max Stake / Maximum, any case.
+    "max_button": ('[data-testid="betslip-container"] :is(button, a, [role="button"], span, div)'
+                   ':text-matches("^\\\\s*max(imum)?(\\\\s+(bet|stake))?\\\\s*$", "i") >> visible=true'),
     "confirmation": '[data-testid="bet-slip-single-tab-confirmation-bet"]',
     "clear_all": '[data-testid="clear-all-button"]',
     "market_group": 'button, a, [role="tab"], [role="button"], h2, h3, h4',  # a market section's heading
@@ -160,6 +164,16 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
     if seen_lines:
         return None, f"line {want_line:g} not offered (book has {', '.join(sorted(set(seen_lines)))})"
     return None, f"no {rule['market_key']} {period} market"
+
+
+def slip_amount(text: str | None) -> float | None:
+    """'1,056.00' or '$250' from the stake box -> 1056.0; None if it holds no amount."""
+    cleaned = re.sub(r"[^0-9.]", "", text or "")
+    try:
+        v = float(cleaned)
+    except ValueError:
+        return None
+    return v if v > 0 else None
 
 
 def suggestion_price(suggestion: dict[str, Any] | None, outcome_id: str) -> float | None:
@@ -447,7 +461,25 @@ class BodogAdapter(BookAdapter):
         return BetResult(BetStatus.REJECTED, 0, reason=reason, retryable=retry, timings=timings, raw=resp)
 
     # ----- betting by clicking the page like a person ----------------------
-    async def place_ui(self, sel: Selection, stake: float, dry_run: bool) -> BetResult:
+    has_max_button = True
+
+    async def _press_max(self, page: Any, s: dict[str, str], stake_box: Any) -> float | None:
+        """Press the bet slip's Max button and read back the stake it fills in."""
+        before = await stake_box.input_value()
+        await human.click(page, page.locator(s["max_button"]).first)
+        value = None
+        for _ in range(20):
+            await asyncio.sleep(0.15)
+            text = await stake_box.input_value()
+            value = slip_amount(text)
+            if value and text != before:
+                return value
+        return value
+
+    async def place_ui(self, sel: Selection, stake: float, dry_run: bool, use_max_button: bool = False,
+                       min_stake: float = 0.0) -> BetResult:
+        """Click the outcome, enter the stake and press Place, as a person would. With use_max_button the
+        slip's own Max button sets the stake, and `stake` is only the most you allow (your caps)."""
         if not self.browser:
             raise UiNotReady("ui mode needs a browser")
         page = self.browser.page
@@ -464,11 +496,24 @@ class BodogAdapter(BookAdapter):
             await human.click(page, outcome)
             stake_box = page.locator(s["stake_input"]).first
             await stake_box.wait_for(state="visible", timeout=8000)
-            await human.type_into(page, stake_box, f"{stake:g}")
+            if use_max_button:
+                slip_max = await self._press_max(page, s, stake_box)
+                if not slip_max:
+                    raise UiNotReady("the Max button didn't fill in a stake")
+                if slip_max > stake:  # more than your caps allow: type the capped amount instead
+                    await human.type_into(page, stake_box, f"{stake:g}")
+                else:
+                    stake = slip_max
+            else:
+                await human.type_into(page, stake_box, f"{stake:g}")
         except Exception as e:  # nothing has been submitted yet
             await human.click(page, page.locator(s["clear_all"]).first, optional=True)
             raise UiNotReady(f"bet slip page element not found: {e}") from e
         timings["filled_ms"] = (time.monotonic() - t0) * 1000
+        if stake < min_stake:
+            await human.click(page, page.locator(s["clear_all"]).first, optional=True)
+            return BetResult(BetStatus.REJECTED, stake, sel.decimal, timings=timings,
+                             reason=f"the most the bet slip allows is {stake:g}, below min_stake {min_stake:g}")
         if dry_run:
             await asyncio.sleep(random.uniform(1.0, 2.0))
             await human.click(page, page.locator(s["clear_all"]).first, optional=True)

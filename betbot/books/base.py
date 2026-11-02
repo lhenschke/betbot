@@ -36,6 +36,7 @@ class UiNotReady(Exception):
 
 class BookAdapter(ABC):
     code: str
+    has_max_button = False  # place_ui can let the bet slip's own Max button set the stake
 
     def __init__(self, code: str, cfg: "BookConfig", transport: Transport, ledger: "Ledger | None" = None,
                  browser: "BrowserSession | None" = None):
@@ -63,8 +64,10 @@ class BookAdapter(ABC):
         ...
 
     @abstractmethod
-    async def place_ui(self, sel: Selection, stake: float, dry_run: bool) -> BetResult:
-        ...
+    async def place_ui(self, sel: Selection, stake: float, dry_run: bool, use_max_button: bool = False,
+                       min_stake: float = 0.0) -> BetResult:
+        """With use_max_button (only if has_max_button), the slip's Max button sets the stake and
+        `stake` is the most allowed by your caps."""
 
     async def book_max_stake(self, sel: Selection) -> float | None:
         """The most the book will take on this selection now (for stake mode "max"); None if unknown."""

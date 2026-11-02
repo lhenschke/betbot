@@ -284,3 +284,104 @@ def test_tennis_total_games_not_sets_or_player_totals():
         ev, js, row, team = tennis_row(id=f"021126-1000_OZ_ATP_bellucci m_sonego l_Under_{total}", bettype="Under",
                                        spread="None", total=total)
         assert find_selection(ev, js, row, team)[0] is None
+
+
+# ----- mouse betting with the bet slip's Max button ---------------------------------------------
+
+class FakeLocator:
+    def __init__(self, slip, name):
+        self.slip, self.name = slip, name
+
+    @property
+    def first(self):
+        return self
+
+    async def wait_for(self, **kw):
+        pass
+
+    async def count(self):
+        return 1
+
+    async def input_value(self):
+        return self.slip.stake_text
+
+
+class FakeSlipPage:
+    """A bet slip whose Max button fills in max_text; typing replaces the stake."""
+
+    def __init__(self, max_text):
+        self.max_text, self.stake_text, self.clicked = max_text, "", []
+
+    def locator(self, selector):
+        name = next((k for k, v in self.sels.items() if v == selector), selector)
+        return FakeLocator(self, name)
+
+
+class FakeSlipBrowser(FakeBrowser):
+    def __init__(self, page):
+        self.page = page
+
+    async def accept_cookies(self):
+        pass
+
+
+def slip_adapter(monkeypatch, max_text):
+    from betbot import human
+    from betbot.books import bodog
+    from betbot.config import BookConfig
+    page = FakeSlipPage(max_text)
+    adapter = BodogAdapter("OZ", BookConfig(base_url="https://www.ozoon.eu"), None, None, FakeSlipBrowser(page))
+    page.sels = {k: v.format(outcome_id=captured_selection().outcome_id) for k, v in adapter.selectors.items()}
+
+    async def click(pg, loc, optional=False):
+        pg.clicked.append(loc.name)
+        if loc.name == "max_button":
+            pg.stake_text = pg.max_text
+        if loc.name == "clear_all":
+            pg.stake_text = ""
+        return True
+
+    async def type_into(pg, loc, text):
+        pg.clicked.append(f"typed {text}")
+        pg.stake_text = text
+
+    monkeypatch.setattr(human, "click", click)
+    monkeypatch.setattr(human, "type_into", type_into)
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(bodog.asyncio, "sleep", lambda s: real_sleep(0))
+    return adapter, page
+
+
+import asyncio  # noqa: E402
+
+
+async def test_max_button_sets_the_stake(monkeypatch):
+    adapter, page = slip_adapter(monkeypatch, "1,056.00")
+    res = await adapter.place_ui(captured_selection(), 5000, dry_run=True, use_max_button=True, min_stake=5)
+    assert res.status.value == "dry_run" and res.stake == 1056.0
+    assert "max_button" in page.clicked and not any(c.startswith("typed") for c in page.clicked)
+
+
+async def test_max_button_above_your_caps_types_the_cap(monkeypatch):
+    adapter, page = slip_adapter(monkeypatch, "1,056.00")
+    res = await adapter.place_ui(captured_selection(), 500, dry_run=True, use_max_button=True, min_stake=5)
+    assert res.stake == 500 and "typed 500" in page.clicked
+
+
+async def test_max_button_below_min_stake_is_not_bet(monkeypatch):
+    adapter, page = slip_adapter(monkeypatch, "3.00")
+    res = await adapter.place_ui(captured_selection(), 500, dry_run=True, use_max_button=True, min_stake=5)
+    assert res.status.value == "rejected" and "below min_stake" in res.reason and page.clicked[-1] == "clear_all"
+
+
+async def test_max_button_that_fills_nothing_stops_before_place(monkeypatch):
+    from betbot.books.base import UiNotReady
+    adapter, page = slip_adapter(monkeypatch, "")
+    with pytest.raises(UiNotReady, match="Max button"):
+        await adapter.place_ui(captured_selection(), 500, dry_run=True, use_max_button=True)
+
+
+def test_slip_amount():
+    from betbot.books.bodog import slip_amount
+    assert slip_amount("1,056.00") == 1056.0 and slip_amount("$250") == 250 and slip_amount("") is None
+    assert slip_amount("0.00") is None

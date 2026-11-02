@@ -469,7 +469,8 @@ class MyBookieAdapter(BookAdapter):
         return BetResult(BetStatus.REJECTED, stake, price, reason=reason, retryable=retry, timings=timings, raw=resp)
 
     # ----- betting by clicking the page like a person ----------------------
-    async def place_ui(self, sel: Selection, stake: float, dry_run: bool) -> BetResult:
+    async def place_ui(self, sel: Selection, stake: float, dry_run: bool, use_max_button: bool = False,
+                       min_stake: float = 0.0) -> BetResult:
         """Click the outcome, type the stake, press Place, as a person would.
 
         The bet slip's own check (bet-options, sent by the page when the outcome is clicked) gives

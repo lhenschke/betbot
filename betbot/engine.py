@@ -241,19 +241,22 @@ class Engine:
             return "pacing: per-hour limit"
         return None
 
-    def stake_for(self, row: ArbRow, sel: Selection, book_max: float | None = None) -> tuple[float, str]:
+    def stake_for(self, row: ArbRow, sel: Selection, book_max: float | None = None,
+                  slip_sets_max: bool = False) -> tuple[float, str]:
         """Your stake, exactly as set. Only when a limit cuts it down is the result rounded down to a
         multiple of round_to (never to nothing) and held to min_stake (in attempt).
 
         In stake mode "max" there is no stake of your own: the bet is the most the book takes right now
-        (book_max, from its bet slip, else the feed's book_limit), within the caps and your balance."""
+        (book_max, from its bet slip, else the feed's book_limit), within the caps and your balance.
+        With slip_sets_max the bet slip's own Max button decides it at the book, and this returns
+        only the most your caps allow."""
         sc = self.cfg.stake
         acct = self.account(row.book)
         caps: dict[str, float] = {}
         if sc.mode == "max":
             if book_max:
                 caps["book max"] = book_max
-            elif not row.book_limit:
+            elif not row.book_limit and not slip_sets_max:
                 return 0.0, "book max unknown"
             balance = self.books[row.book].balance if row.book in self.books else None
             if balance is not None:
@@ -339,13 +342,17 @@ class Engine:
                 if (auto and self.cfg.pacing.skip_marginal_pct and round(v.live_arbsize) <= th.auto_min
                         and random.random() < self.cfg.pacing.skip_marginal_pct):
                     return self._skip(v, "randomly skipped marginal bet (pacing)")
+                # In max mode, mouse betting presses the bet slip's own Max button where the book has one.
+                max_button = (self.cfg.stake.mode == "max" and mode == "ui"
+                              and getattr(adapter, "has_max_button", False))
                 try:
-                    book_max = await adapter.book_max_stake(sel) if self.cfg.stake.mode == "max" else None
+                    book_max = (await adapter.book_max_stake(sel)
+                                if self.cfg.stake.mode == "max" and not max_button else None)
                 except PermissionError as e:
                     st.logged_in = False
                     self._spawn(self.ensure_login(book))
                     return self._skip(v, f"login needed: {e}")
-                stake, limit_name = self.stake_for(latest, sel, book_max)
+                stake, limit_name = self.stake_for(latest, sel, book_max, slip_sets_max=max_button)
                 if stake <= 0 or (limit_name != "stake" and stake < self.cfg.stake.min_stake):
                     return self._skip(v, f"{limit_name} leaves only {stake:g}, below min_stake "
                                          f"{self.cfg.stake.min_stake:g}")
@@ -355,7 +362,9 @@ class Engine:
                 try:
                     if mode == "ui":
                         try:
-                            result = await adapter.place_ui(sel, stake, self.cfg.dry_run)
+                            result = (await adapter.place_ui(sel, stake, self.cfg.dry_run, use_max_button=True,
+                                                             min_stake=self.cfg.stake.min_stake)
+                                      if max_button else await adapter.place_ui(sel, stake, self.cfg.dry_run))
                         except UiNotReady as e:  # nothing was submitted; never quietly switch to the API
                             log.warning("%s: mouse betting couldn't get to the bet: %s", row_id, e)
                             return self._skip(v, f"mouse betting: {e}")

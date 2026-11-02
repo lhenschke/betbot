@@ -31,7 +31,7 @@ arbhunterpro feeds ──► poller (1s) ──► engine ──► book adapter
    - the **price is verified once, in the bet slip**: the bet is placed only if the slip offers at least the price the feed saw at the book, so a price that has moved against you is refused there, not guessed at from a separate odds fetch.
    - automatic live bets wait while the feed itself has stopped updating (its `runtime` hasn't moved for `max_live_age_s`). A row's own `date` is when its prices last changed, so a steady line isn't treated as stale. Bets you click skip this check.
 4. **Stake.** The lowest of:
-   - your stake, or with `stake.mode: max` (the dashboard's **Max** box) the most the book will take on that bet right now, as its own bet slip works it out. If the book doesn't say, the feed's `book_limit` is used; with neither, the bet is skipped. Max mode also stays within your balance;
+   - your stake, or with `stake.mode: max` (the dashboard's **Max** box) the most the book will take on that bet right now. With mouse betting at Ozoon, the bot presses the bet slip's own **Max** button and bets what it fills in; if that's more than your caps below allow, it types the capped amount instead. Otherwise the book's max comes from its bet slip check, or the feed's `book_limit`; with neither, the bet is skipped. Max mode also stays within your balance. If Ozoon's Max button isn't found, the bet is skipped with "the Max button didn't fill in a stake" or a "page element not found" reason: run capture mode, press Max once, and set `books.OZ.ui_selectors.max_button` to match;
    - the feed's `book_limit`;
    - the book's max stake;
    - the per-event and daily caps (raise these for max mode, or they become the stake).

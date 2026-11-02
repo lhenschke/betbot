@@ -397,3 +397,22 @@ def test_dashboard_settings(setup):
     assert (s["stake_mode"], s["only_live"], s["only_leagues"], s["one_bet_per_market"]) == \
         ("max", True, ["ATP", "WTA"], False)
     assert cfg.stake.mode == "max" and cfg.only.leagues == ["ATP", "WTA"]
+
+
+async def test_max_mode_presses_the_slips_max_button(setup):
+    cfg, ledger, poller, adapter, eng = setup
+    cfg.stake.mode = "max"
+    adapter.has_max_button = True
+    calls = []
+
+    async def book_max(sel):
+        raise AssertionError("the API max isn't used when the slip has a Max button")
+
+    async def place_ui(sel, stake, dry_run, use_max_button=False, min_stake=0.0):
+        calls.append((stake, use_max_button, min_stake))
+        return BetResult(BetStatus.DRY_RUN, 312.0, sel.decimal)
+
+    adapter.book_max_stake, adapter.place_ui = book_max, place_ui
+    await feed(eng, poller, arbsize=2, book_limit="None")
+    assert calls == [(500, True, 5)]  # the most your caps allow: the 500 event cap
+    assert ledger.recent_bets(1)[0]["stake"] == 312.0  # what the slip actually took
