@@ -67,11 +67,15 @@ class Aliases:
         return _load(league.upper())
 
 
+# Leagues that also use another league's aliases: college basketball and football share their schools.
+ALSO_USES = {"NCAAB": ["NCAAF"]}
+
+
 @lru_cache(maxsize=64)
 def _load(league: str) -> Aliases:
     merged: dict[str, list[str]] = {}
-    for d in (ALIAS_DIR, LOCAL_ALIAS_DIR):
-        p = d / f"{league}.yaml"
+    files = [d / f"{lg}.yaml" for d in (ALIAS_DIR, LOCAL_ALIAS_DIR) for lg in [*ALSO_USES.get(league, []), league]]
+    for p in files:
         if p.exists():
             for canon, variants in (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).items():
                 merged.setdefault(canon, []).extend(variants or [])
@@ -119,8 +123,22 @@ def _initials_fit(abbr: str, name: str) -> bool:
     return i == len(letters)
 
 
+_PLAYER_ABBR = re.compile(r"^([a-z][a-z' -]*?)\s+([a-z])$")
+
+
+def _player_fit(abbr: str, name: str) -> bool | None:
+    """Tennis players come as 'surname initial' ('machac t' for Tomas Machac, 'de minaur a').
+    None when abbr isn't in that form."""
+    m = _PLAYER_ABBR.match(abbr.strip())
+    if not m:
+        return None
+    surname, initial = normalize(m.group(1)), m.group(2)
+    words = normalize(name).split()
+    return bool(words) and words[0][0] == initial and f" {surname} " in f" {' '.join(words[1:])} "
+
+
 def abbr_score(abbr: str | None, book_name: str, aliases: Aliases) -> float:
-    """How well a feed abbreviation (NOR, M-OH, ...) fits a book team name."""
+    """How well a feed abbreviation (NOR, M-OH, 'machac t', ...) fits a book team name."""
     if not abbr:
         return 50.0
     ca, cb = aliases.resolve(abbr), aliases.resolve(book_name)
@@ -128,4 +146,6 @@ def abbr_score(abbr: str | None, book_name: str, aliases: Aliases) -> float:
         if cb:
             return 100.0 if ca == cb else 0.0
         return 100.0 if team_score(ca, book_name, Aliases()) >= 90 else 20.0
+    if (fit := _player_fit(abbr, book_name)) is not None:
+        return 100.0 if fit else 30.0
     return 70.0 if _initials_fit(abbr, book_name) else 30.0

@@ -1,0 +1,1172 @@
+[
+ {
+  "path": [
+   {
+    "id": "6869394",
+    "link": "/tennis/atp/paris",
+    "description": "Paris",
+    "type": "LEAGUE",
+    "sportCode": "TENN",
+    "order": 9223372036854775807,
+    "leaf": true,
+    "current": true
+   },
+   {
+    "id": "6672423",
+    "link": "/tennis/atp",
+    "description": "ATP",
+    "type": "TOUR",
+    "sportCode": "TENN",
+    "order": 1,
+    "leaf": false,
+    "current": false
+   },
+   {
+    "id": "239",
+    "link": "/tennis",
+    "description": "Tennis",
+    "type": "SPORT",
+    "sportCode": "TENN",
+    "order": 4,
+    "leaf": false,
+    "current": false
+   }
+  ],
+  "events": [
+   {
+    "id": "33089973",
+    "description": "Mattia Bellucci vs Lorenzo Sonego",
+    "type": "GAMEEVENT",
+    "link": "/tennis/atp/paris/mattia-bellucci-lorenzo-sonego-202611021000",
+    "status": "O",
+    "sport": "TENN",
+    "startTime": 1793631600000,
+    "live": true,
+    "awayTeamFirst": false,
+    "denySameGame": "NO",
+    "teaserAllowed": true,
+    "competitionId": "6869394",
+    "notes": "",
+    "numMarkets": 31,
+    "lastModified": 1793635534034,
+    "competitors": [
+     {
+      "id": "33089973-16418098",
+      "name": "Mattia Bellucci",
+      "home": true,
+      "shortName": "Bellucci"
+     },
+     {
+      "id": "33089973-16118917",
+      "name": "Lorenzo Sonego",
+      "home": false,
+      "shortName": "Sonego"
+     }
+    ],
+    "displayGroups": [
+     {
+      "id": "40-122",
+      "description": "Game Lines",
+      "defaultType": true,
+      "alternateType": false,
+      "markets": [
+       {
+        "id": "541589147",
+        "descriptionKey": "Handicap - Asian - Games",
+        "description": "Game Spread",
+        "key": "2W-HCAP",
+        "marketTypeId": "67",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464939768",
+          "description": "Mattia Bellucci",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836119180",
+           "handicap": "-5.5",
+           "american": "-110",
+           "decimal": "1.909091",
+           "fractional": "10/11"
+          }
+         },
+         {
+          "id": "2464939769",
+          "description": "Lorenzo Sonego",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836119181",
+           "handicap": "5.5",
+           "american": "-120",
+           "decimal": "1.833333",
+           "fractional": "5/6"
+          }
+         }
+        ]
+       },
+       {
+        "id": "541589154",
+        "descriptionKey": "Head To Head",
+        "description": "Moneyline",
+        "key": "2W-12",
+        "marketTypeId": "68",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464939783",
+          "description": "Mattia Bellucci",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836116770",
+           "american": "-20000",
+           "decimal": "1.005",
+           "fractional": "1/200"
+          }
+         },
+         {
+          "id": "2464939782",
+          "description": "Lorenzo Sonego",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836116769",
+           "american": "+1800",
+           "decimal": "19.00",
+           "fractional": "18/1"
+          }
+         }
+        ]
+       },
+       {
+        "id": "541589149",
+        "descriptionKey": "Main Dynamic Over/Under",
+        "description": "Total",
+        "key": "2W-OU",
+        "marketTypeId": "120755",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464939772",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836146097",
+           "handicap": "18.5",
+           "american": "-120",
+           "decimal": "1.833333",
+           "fractional": "5/6"
+          }
+         },
+         {
+          "id": "2464939773",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836146098",
+           "handicap": "18.5",
+           "american": "-110",
+           "decimal": "1.909091",
+           "fractional": "10/11"
+          }
+         }
+        ]
+       },
+       {
+        "id": "541589155",
+        "descriptionKey": "Handicap - Asian - Games",
+        "description": "Game Spread",
+        "key": "2W-HCAP",
+        "marketTypeId": "67",
+        "status": "S",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "247",
+         "description": "Live 2nd Set",
+         "abbreviation": "S2",
+         "live": true,
+         "main": false
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464939784",
+          "description": "Mattia Bellucci - LS2",
+          "status": "S",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836098728",
+           "handicap": "-3.5",
+           "american": "-110",
+           "decimal": "1.909091",
+           "fractional": "10/11"
+          }
+         },
+         {
+          "id": "2464939785",
+          "description": "Lorenzo Sonego - LS2",
+          "status": "S",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836098729",
+           "handicap": "3.5",
+           "american": "-120",
+           "decimal": "1.833333",
+           "fractional": "5/6"
+          }
+         }
+        ]
+       },
+       {
+        "id": "541590062",
+        "descriptionKey": "Head To Head",
+        "description": "Moneyline",
+        "key": "2W-12",
+        "marketTypeId": "68",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "247",
+         "description": "Live 2nd Set",
+         "abbreviation": "S2",
+         "live": true,
+         "main": false
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464946759",
+          "description": "Mattia Bellucci - LS2",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836126745",
+           "american": "-2800",
+           "decimal": "1.035714",
+           "fractional": "1/28"
+          }
+         },
+         {
+          "id": "2464946760",
+          "description": "Lorenzo Sonego - LS2",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836126746",
+           "american": "+1100",
+           "decimal": "12.00",
+           "fractional": "11/1"
+          }
+         }
+        ]
+       },
+       {
+        "id": "541600235",
+        "descriptionKey": "Main Dynamic Over/Under",
+        "description": "Total",
+        "key": "2W-OU",
+        "marketTypeId": "120755",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "247",
+         "description": "Live 2nd Set",
+         "abbreviation": "S2",
+         "live": true,
+         "main": false
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464986964",
+          "description": "Over - LS2",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836098951",
+           "handicap": "8.5",
+           "american": "-125",
+           "decimal": "1.800",
+           "fractional": "4/5"
+          }
+         },
+         {
+          "id": "2464986963",
+          "description": "Under - LS2",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836098950",
+           "handicap": "8.5",
+           "american": "-105",
+           "decimal": "1.952381",
+           "fractional": "20/21"
+          }
+         }
+        ]
+       },
+       {
+        "id": "541600228",
+        "descriptionKey": "Handicap - Asian - Games",
+        "description": "Game Spread",
+        "key": "2W-HCAP",
+        "marketTypeId": "67",
+        "status": "S",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "248",
+         "description": "Live 3rd Set",
+         "abbreviation": "S3",
+         "live": true,
+         "main": false
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464986943",
+          "description": "Mattia Bellucci - LS3",
+          "status": "S",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40835820137",
+           "handicap": "-1.5",
+           "american": "+140",
+           "decimal": "2.400",
+           "fractional": "7/5"
+          }
+         },
+         {
+          "id": "2464986944",
+          "description": "Lorenzo Sonego - LS3",
+          "status": "S",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40835820138",
+           "handicap": "1.5",
+           "american": "-185",
+           "decimal": "1.540541",
+           "fractional": "20/37"
+          }
+         }
+        ]
+       },
+       {
+        "id": "541600670",
+        "descriptionKey": "Head To Head",
+        "description": "Moneyline",
+        "key": "2W-12",
+        "marketTypeId": "68",
+        "status": "S",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "248",
+         "description": "Live 3rd Set",
+         "abbreviation": "S3",
+         "live": true,
+         "main": false
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464986946",
+          "description": "Mattia Bellucci - LS3",
+          "status": "S",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40835777377",
+           "american": "-120",
+           "decimal": "1.833333",
+           "fractional": "5/6"
+          }
+         },
+         {
+          "id": "2464986945",
+          "description": "Lorenzo Sonego - LS3",
+          "status": "S",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40835777376",
+           "american": "-110",
+           "decimal": "1.909091",
+           "fractional": "10/11"
+          }
+         }
+        ]
+       }
+      ],
+      "order": 1
+     },
+     {
+      "id": "40-1336",
+      "description": "Spreads/Totals",
+      "defaultType": false,
+      "alternateType": false,
+      "markets": [
+       {
+        "id": "G-2W-OU.Alternate Total Games.245",
+        "descriptionKey": "Alternate Total Games",
+        "description": "Alternate Total Games",
+        "key": "2W-OU",
+        "marketTypeId": "71",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464951380",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836146095",
+           "handicap": "17.5",
+           "american": "-1000",
+           "decimal": "1.100",
+           "fractional": "1/10"
+          }
+         },
+         {
+          "id": "2464951381",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836146096",
+           "handicap": "17.5",
+           "american": "+550",
+           "decimal": "6.500",
+           "fractional": "11/2"
+          }
+         },
+         {
+          "id": "2464946841",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836146099",
+           "handicap": "19.5",
+           "american": "+115",
+           "decimal": "2.150",
+           "fractional": "23/20"
+          }
+         },
+         {
+          "id": "2464946842",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836146100",
+           "handicap": "19.5",
+           "american": "-150",
+           "decimal": "1.666667",
+           "fractional": "2/3"
+          }
+         },
+         {
+          "id": "2464950765",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836146101",
+           "handicap": "20.5",
+           "american": "+600",
+           "decimal": "7.00",
+           "fractional": "6/1"
+          }
+         },
+         {
+          "id": "2464950766",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836146102",
+           "handicap": "20.5",
+           "american": "-1100",
+           "decimal": "1.090909",
+           "fractional": "1/11"
+          }
+         },
+         {
+          "id": "2464950769",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836146105",
+           "handicap": "22.5",
+           "american": "+700",
+           "decimal": "8.00",
+           "fractional": "7/1"
+          }
+         },
+         {
+          "id": "2464950770",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836146106",
+           "handicap": "22.5",
+           "american": "-1400",
+           "decimal": "1.071429",
+           "fractional": "1/14"
+          }
+         }
+        ]
+       },
+       {
+        "id": "G-2W-OU.Alternate Total Games.247",
+        "descriptionKey": "Alternate Total Games",
+        "description": "Alternate Total Games",
+        "key": "2W-OU",
+        "marketTypeId": "71",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "247",
+         "description": "Live 2nd Set",
+         "abbreviation": "S2",
+         "live": true,
+         "main": false
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464986962",
+          "description": "Over - LS2",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836098948",
+           "handicap": "7.5",
+           "american": "-1100",
+           "decimal": "1.090909",
+           "fractional": "1/11"
+          }
+         },
+         {
+          "id": "2464986961",
+          "description": "Under - LS2",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836098949",
+           "handicap": "7.5",
+           "american": "+600",
+           "decimal": "7.00",
+           "fractional": "6/1"
+          }
+         },
+         {
+          "id": "2464996792",
+          "description": "Over - LS2",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836098945",
+           "handicap": "9.5",
+           "american": "+110",
+           "decimal": "2.100",
+           "fractional": "11/10"
+          }
+         },
+         {
+          "id": "2464996793",
+          "description": "Under - LS2",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836098944",
+           "handicap": "9.5",
+           "american": "-145",
+           "decimal": "1.690",
+           "fractional": "20/29"
+          }
+         }
+        ]
+       },
+       {
+        "id": "G-2W-OU.Total Games O/U - Lorenzo Sonego.245",
+        "descriptionKey": "Total Games O/U - Lorenzo Sonego",
+        "description": "Total Games O/U - Lorenzo Sonego",
+        "key": "2W-OU",
+        "marketTypeId": "69",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464939778",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836098696",
+           "handicap": "6.5",
+           "american": "-120",
+           "decimal": "1.833333",
+           "fractional": "5/6"
+          }
+         },
+         {
+          "id": "2464939779",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836098697",
+           "handicap": "6.5",
+           "american": "-110",
+           "decimal": "1.909091",
+           "fractional": "10/11"
+          }
+         }
+        ]
+       },
+       {
+        "id": "G-2W-OU.Total Games O/U - Mattia Bellucci.245",
+        "descriptionKey": "Total Games O/U - Mattia Bellucci",
+        "description": "Total Games O/U - Mattia Bellucci",
+        "key": "2W-OU",
+        "marketTypeId": "69",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464939636",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836098754",
+           "handicap": "12.5",
+           "american": "+600",
+           "decimal": "7.00",
+           "fractional": "6/1"
+          }
+         },
+         {
+          "id": "2464939637",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836098755",
+           "handicap": "12.5",
+           "american": "-1100",
+           "decimal": "1.090909",
+           "fractional": "1/11"
+          }
+         }
+        ]
+       },
+       {
+        "id": "G-2W-HCAP.Alternate Game Spread.245",
+        "descriptionKey": "Alternate Game Spread",
+        "description": "Alternate Game Spread",
+        "key": "2W-HCAP",
+        "marketTypeId": "72",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464950757",
+          "description": "Mattia Bellucci",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836119184",
+           "handicap": "-3.5",
+           "american": "-1600",
+           "decimal": "1.0625",
+           "fractional": "1/16"
+          }
+         },
+         {
+          "id": "2464950758",
+          "description": "Lorenzo Sonego",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836119185",
+           "handicap": "3.5",
+           "american": "+750",
+           "decimal": "8.500",
+           "fractional": "15/2"
+          }
+         },
+         {
+          "id": "2464946840",
+          "description": "Mattia Bellucci",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836119182",
+           "handicap": "-4.5",
+           "american": "-165",
+           "decimal": "1.606061",
+           "fractional": "20/33"
+          }
+         },
+         {
+          "id": "2464946839",
+          "description": "Lorenzo Sonego",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836119183",
+           "handicap": "4.5",
+           "american": "+125",
+           "decimal": "2.250",
+           "fractional": "5/4"
+          }
+         },
+         {
+          "id": "2464946838",
+          "description": "Mattia Bellucci",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836119178",
+           "handicap": "-6.5",
+           "american": "+550",
+           "decimal": "6.500",
+           "fractional": "11/2"
+          }
+         },
+         {
+          "id": "2464946837",
+          "description": "Lorenzo Sonego",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836119179",
+           "handicap": "6.5",
+           "american": "-1000",
+           "decimal": "1.100",
+           "fractional": "1/10"
+          }
+         }
+        ]
+       }
+      ],
+      "order": 3
+     },
+     {
+      "id": "40-125",
+      "description": "Set Props",
+      "defaultType": false,
+      "alternateType": false,
+      "markets": [
+       {
+        "id": "541589150",
+        "descriptionKey": "Set Betting",
+        "description": "Set Betting",
+        "key": "GAME-PROP",
+        "marketTypeId": "121126",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464939774",
+          "description": "Mattia Bellucci 2 - 0",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836100418",
+           "american": "-2000",
+           "decimal": "1.050",
+           "fractional": "1/20"
+          }
+         },
+         {
+          "id": "2464939776",
+          "description": "Mattia Bellucci 2 - 1",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836126748",
+           "american": "+1200",
+           "decimal": "13.00",
+           "fractional": "12/1"
+          }
+         },
+         {
+          "id": "2464939775",
+          "description": "Lorenzo Sonego 2 - 1",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836126747",
+           "american": "+1800",
+           "decimal": "19.00",
+           "fractional": "18/1"
+          }
+         }
+        ]
+       },
+       {
+        "id": "G-2W-HCAP.Set Spread.245",
+        "descriptionKey": "Set Spread",
+        "description": "Set Spread",
+        "key": "2W-HCAP",
+        "marketTypeId": "120801",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464944802",
+          "description": "Mattia Bellucci",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836098937",
+           "handicap": "-1.5",
+           "american": "-1800",
+           "decimal": "1.055556",
+           "fractional": "1/18"
+          }
+         },
+         {
+          "id": "2464944803",
+          "description": "Lorenzo Sonego",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836098936",
+           "handicap": "1.5",
+           "american": "+800",
+           "decimal": "9.00",
+           "fractional": "8/1"
+          }
+         }
+        ]
+       },
+       {
+        "id": "G-2W-OU.Total Sets.245",
+        "descriptionKey": "Total Sets",
+        "description": "Total Sets",
+        "key": "2W-OU",
+        "marketTypeId": "120800",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "245",
+         "description": "Live Match",
+         "abbreviation": "MT",
+         "live": true,
+         "main": true
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464944804",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "40836098496",
+           "handicap": "2.5",
+           "american": "+1200",
+           "decimal": "13.00",
+           "fractional": "12/1"
+          }
+         },
+         {
+          "id": "2464944805",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "40836098497",
+           "handicap": "2.5",
+           "american": "-3300",
+           "decimal": "1.030",
+           "fractional": "1/33"
+          }
+         }
+        ]
+       },
+       {
+        "id": "541591663",
+        "descriptionKey": "Set Correct Score",
+        "description": "Set Correct Score",
+        "key": "GAME-PROP-DYN",
+        "marketTypeId": "10047",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "247",
+         "description": "Live 2nd Set",
+         "abbreviation": "S2",
+         "live": true,
+         "main": false
+        },
+        "availableSGP": false,
+        "outcomes": [
+         {
+          "id": "2464946761",
+          "description": "Mattia Bellucci - 6 - 1 - LS2",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836116762",
+           "american": "+900",
+           "decimal": "10.00",
+           "fractional": "9/1"
+          }
+         },
+         {
+          "id": "2464946764",
+          "description": "Mattia Bellucci - 6 - 2 - LS2",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836098733",
+           "american": "+137",
+           "decimal": "2.37",
+           "fractional": "137/100"
+          }
+         },
+         {
+          "id": "2464946763",
+          "description": "Mattia Bellucci - 6 - 3 - LS2",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836098732",
+           "american": "+750",
+           "decimal": "8.500",
+           "fractional": "15/2"
+          }
+         },
+         {
+          "id": "2464946765",
+          "description": "Mattia Bellucci - 6 - 4 - LS2",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836098734",
+           "american": "+175",
+           "decimal": "2.750",
+           "fractional": "7/4"
+          }
+         },
+         {
+          "id": "2464946767",
+          "description": "Mattia Bellucci - 7 - 5 - LS2",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836116767",
+           "american": "+3300",
+           "decimal": "34.00",
+           "fractional": "33/1"
+          }
+         },
+         {
+          "id": "2464946768",
+          "description": "Mattia Bellucci - 7 - 6 - LS2",
+          "status": "O",
+          "type": "H",
+          "competitorId": "33089973-16418098",
+          "price": {
+           "id": "40836098736",
+           "american": "+1600",
+           "decimal": "17.00",
+           "fractional": "16/1"
+          }
+         },
+         {
+          "id": "2464946772",
+          "description": "Lorenzo Sonego - 6 - 3 - LS2",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40835992119",
+           "american": "+5000",
+           "decimal": "51.00",
+           "fractional": "50/1"
+          }
+         },
+         {
+          "id": "2464946769",
+          "description": "Lorenzo Sonego - 6 - 4 - LS2",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40835992118",
+           "american": "+4000",
+           "decimal": "41.00",
+           "fractional": "40/1"
+          }
+         },
+         {
+          "id": "2464946770",
+          "description": "Lorenzo Sonego - 7 - 5 - LS2",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836090907",
+           "american": "+4000",
+           "decimal": "41.00",
+           "fractional": "40/1"
+          }
+         },
+         {
+          "id": "2464946766",
+          "description": "Lorenzo Sonego - 7 - 6 - LS2",
+          "status": "O",
+          "type": "A",
+          "competitorId": "33089973-16118917",
+          "price": {
+           "id": "40836098735",
+           "american": "+1800",
+           "decimal": "19.00",
+           "fractional": "18/1"
+          }
+         }
+        ]
+       }
+      ],
+      "order": 4
+     }
+    ],
+    "availableSGP": false
+   }
+  ]
+ }
+]

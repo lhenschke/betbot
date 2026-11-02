@@ -1,0 +1,4 @@
+# College basketball also uses every entry in NCAAF.yaml (the same schools), so
+# only add schools here that have no football team, or are spelled differently.
+# Abbreviations seen in the arbhunterpro feed are listed so the opponent check works.
+Seattle: [SEA, Seattle U, Seattle University]

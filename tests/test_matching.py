@@ -31,6 +31,14 @@ def test_abbreviations():
     assert abbr_score("XYZ", "Chicago Bears", Aliases()) < 50
 
 
+def test_tennis_player_abbreviations():
+    # the feed writes players as "surname initial"
+    assert abbr_score("machac t", "Tomas Machac", Aliases()) == 100
+    assert abbr_score("de minaur a", "Alex de Minaur", Aliases()) == 100
+    assert abbr_score("machac t", "Kyrian Jacquet", Aliases()) < 50
+    assert abbr_score("machac t", "Tom Smith", Aliases()) < 50
+
+
 def nfl_events():
     return parse_events(load("oz_coupon_nfl.json"), "OZ", "/football/nfl")
 
@@ -79,3 +87,9 @@ def test_nhl_special_event_is_not_matched():
                              pinn_team="ANA", start_date=special.start_ms, spread=1.5))
     m = match_row(row, events)
     assert m.ok and m.event.description == "Anaheim Ducks @ New York Rangers"
+
+
+def test_ncaab_uses_college_football_aliases_too():
+    ncaab = Aliases.for_league("NCAAB")
+    assert team_score("Louisiana Monroe", "UL Monroe", ncaab) == 100  # from NCAAF.yaml
+    assert team_score("Seattle U", "Seattle", ncaab) == 100           # from NCAAB.yaml

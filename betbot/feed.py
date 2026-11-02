@@ -54,9 +54,19 @@ def _parse_date(v: Any, tz: ZoneInfo) -> float | None:
 _LIVE_LEAGUE = re.compile(r"\s+LIVE$|^LIVE\s+", re.I)
 
 
+_PERIOD_LEAGUE = re.compile(r"^(.*\S)\s+([1-4][HQP])$", re.I)
+
+
 def base_league(league: str) -> str:
     """'NFL LIVE' -> 'NFL': live rows come under their own league name in the feed."""
     return _LIVE_LEAGUE.sub("", league.strip())
+
+
+def split_period(league: str) -> tuple[str, str]:
+    """'NCAAB 1H' -> ('NCAAB', '1H'): half, quarter and period lines come under their own league name
+    in the feed, while the bet type says only 'ATS'. The book's league is the plain one."""
+    m = _PERIOD_LEAGUE.match(league)
+    return (m.group(1), m.group(2).upper()) if m else (league, "")
 
 
 def _abbrs(row_id: str, book: str, *leagues: str) -> tuple[str | None, str | None]:
@@ -84,17 +94,22 @@ def parse_row(d: dict[str, Any], feed_url: str = "", tz: ZoneInfo | None = None)
         arbsize = float(d["arbsize"])
     except (KeyError, TypeError, ValueError):
         return None
-    league, raw_league = base_league(league), league
-    away, home = _abbrs(row_id, book, raw_league, league)
+    raw_league = league
+    live_league = base_league(league)
+    league, period = split_period(live_league)
+    away, home = _abbrs(row_id, book, raw_league, live_league, league)
     livetime = _none(d.get("livetime"))
-    if livetime is None and league != raw_league:
+    if livetime is None and live_league != raw_league:
         livetime = "LIVE"  # a live-league row is live even without a clock, so live age checks apply
+    bettype = str(_none(d.get("bettype")) or "")
+    if period and not re.match(rf"{period}\b", bettype, re.I):
+        bettype = f"{period} {bettype}".strip()
     start = _float(d.get("start_date"))
     return ArbRow(
         id=row_id,
         book=book,
         league=league,
-        bettype=str(_none(d.get("bettype")) or ""),
+        bettype=bettype,
         arbsize=arbsize,
         sqline=sqline,
         pinnline=pinnline,

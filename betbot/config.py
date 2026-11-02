@@ -80,13 +80,24 @@ class BookConfig(BaseModel):
     login_selectors: dict[str, str] = Field(default_factory=dict)  # overrides for re-login
 
 
+# The built-in league feeds. A feed added here later reaches PCs that already have a config.yaml once:
+# see Config.add_new_feeds. One tennis feed covers ATP and WTA (json?atp-pro and json?wta-pro are the same).
+DEFAULT_FEEDS = [
+    "https://arbhunterpro.com/json?nfl-pro",
+    "https://arbhunterpro.com/json?ncaaf-pro",
+    "https://arbhunterpro.com/json?mlb-pro",
+    "https://arbhunterpro.com/json?nhl-pro",
+    "https://arbhunterpro.com/json?ncaab-pro",
+    "https://arbhunterpro.com/json?atp-pro",
+]
+# Feeds every config.yaml already had before feeds_offered existed.
+_ORIGINAL_FEEDS = DEFAULT_FEEDS[:4]
+
+
 class Config(BaseModel):
-    feeds: list[str] = Field(default_factory=lambda: [
-        "https://arbhunterpro.com/json?nfl-pro",
-        "https://arbhunterpro.com/json?ncaaf-pro",
-        "https://arbhunterpro.com/json?mlb-pro",
-        "https://arbhunterpro.com/json?nhl-pro",
-    ])
+    feeds: list[str] = Field(default_factory=lambda: list(DEFAULT_FEEDS))
+    # Built-in feeds this PC has been given; one you remove from feeds isn't added back.
+    feeds_offered: list[str] = Field(default_factory=lambda: list(DEFAULT_FEEDS))
     feed_interval_s: float = 1.0
     feed_date_tz: str = "UTC"
     dry_run: bool = True
@@ -115,7 +126,16 @@ class Config(BaseModel):
         if not p.exists():
             return cls()
         data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        if "feeds_offered" not in data:
+            data["feeds_offered"] = list(_ORIGINAL_FEEDS)  # a config.yaml from before new feeds were added
         return cls.model_validate(data)
+
+    def add_new_feeds(self) -> list[str]:
+        """Add built-in feeds this PC hasn't been given yet; returns them (empty if none)."""
+        new = [u for u in DEFAULT_FEEDS if u not in self.feeds_offered]
+        self.feeds += [u for u in new if u not in self.feeds]
+        self.feeds_offered += new
+        return new
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(

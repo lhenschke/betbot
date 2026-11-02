@@ -166,6 +166,9 @@ def main() -> None:
         return
     cfg = Config.load(config_path)
     setup_logging(Path(cfg.data_dir), args.verbose)
+    if (new_feeds := cfg.add_new_feeds()) and config_path.exists():
+        cfg.save(config_path)
+        logging.getLogger("betbot").info("added new league feeds to %s: %s", config_path, ", ".join(new_feeds))
 
     if args.cmd == "set-credentials":
         book = cfg.book_code(args.book)

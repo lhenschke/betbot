@@ -82,3 +82,26 @@ def test_feed_age_follows_the_runtime_not_the_rows():
     assert 29 < p.feed_age("u") < 31
     p.diff("u", [], 101.0)  # it moved
     assert p.feed_age("u") < 1
+
+
+def test_period_league_becomes_league_and_bettype():
+    # half/quarter lines come as league "NCAAB 1H" with bettype "ATS"; books only know "NCAAB"
+    r = parse_row(feed_row(id="021126-1900_LV_NCAAB 1H_ORE_MONT_ATS_11", book="LV", league="NCAAB 1H",
+                           sq_team="Montana", pinn_team="ORE", spread=11))
+    assert (r.league, r.bettype) == ("NCAAB", "1H ATS")
+    assert (r.away_abbr, r.home_abbr) == ("ORE", "MONT")
+    r = parse_row(feed_row(id="021126-1900_OZ_NBA 1Q LIVE_BOS_NYK_Over_55", league="NBA 1Q LIVE",
+                           bettype="Over", spread="None", total=55))
+    assert (r.league, r.bettype) == ("NBA", "1Q Over") and r.is_live
+    assert (r.away_abbr, r.home_abbr) == ("BOS", "NYK")
+    assert parse_row(feed_row(league="NCAAB 1H", bettype="1H ATS")).bettype == "1H ATS"  # not doubled
+
+
+def test_real_ncaab_and_tennis_feeds():
+    rows, _ = parse_feed(load("feed_ncaab-pro.json"))
+    assert {r.league for r in rows} == {"NCAAB"}
+    assert {r.bettype for r in rows if "1H" in r.id} <= {"1H ATS", "1H Over", "1H Under"}
+    rows, _ = parse_feed(load("feed_atp-pro.json"))
+    assert {r.league for r in rows} == {"ATP", "WTA"}
+    live = next(r for r in rows if r.id == "021126-0740_OZ_ATP LIVE_machac t_jacquet k_Under_23.5")
+    assert live.is_live and (live.away_abbr, live.home_abbr) == ("machac t", "jacquet k")

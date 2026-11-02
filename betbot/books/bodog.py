@@ -98,6 +98,7 @@ def _f(v: Any) -> float | None:
 
 def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
                    team: Competitor | None, rules: dict[str, Any] | None = None) -> tuple[Selection | None, str]:
+    rules = rules or load_rules()
     parsed = parse_bettype(row.bettype, rules)
     if not parsed:
         return None, f"unsupported bettype '{row.bettype}'"
@@ -107,6 +108,8 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
         return None, f"row has no {rule['line']} value"
     if rule["pick"] == "team" and team is None:
         return None, "no matched team for a team bet"
+    periods = {period, *(rules.get("period_aliases") or {}).get(period, [])}
+    excluded = [normalize(x) for x in rules.get("exclude_markets") or []]
     comp_names = [normalize(c.name) for c in event.competitors]
     seen_lines: list[str] = []
     found: list[Selection] = []
@@ -115,9 +118,11 @@ def find_selection(event: BookEvent, ev_json: dict[str, Any], row: ArbRow,
         for m in dg.get("markets", []):
             if m.get("key") != rule["market_key"]:
                 continue
-            if (m.get("period") or {}).get("abbreviation") != period:
+            if (m.get("period") or {}).get("abbreviation") not in periods:
                 continue
             desc = m.get("description", "")
+            if any(x in normalize(desc) for x in excluded):
+                continue  # e.g. tennis "Set Spread": same market key and lines as the game spread
             if rule["pick"] in ("over", "under"):
                 nd = normalize(desc)
                 if " - " in desc or any(n and n in nd for n in comp_names):
@@ -293,7 +298,8 @@ class BodogAdapter(BookAdapter):
             except Exception as e:  # noqa: BLE001 - one bad sport shouldn't stop discovery
                 log.warning("nav %s failed: %s", sport.get("link"), e)
                 continue
-            leagues += [c for c in sub.get("children") or [] if c.get("type") == "LEAGUE"]
+            # Tennis groups its tournaments under tours (ATP, WTA), which the feed names as its leagues.
+            leagues += [c for c in sub.get("children") or [] if c.get("type") in ("LEAGUE", "TOUR")]
         self._nav = leagues
         return leagues
 

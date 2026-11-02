@@ -35,6 +35,18 @@ periods:
   2P:  P2
   3P:  P3
 
+# Other period abbreviations that also mean the given one. Tennis markets are
+# per match ("MT"), not per game, so a full-game row takes the match market.
+period_aliases:
+  G: [MT]
+
+# Markets never bet, by words in their description. Tennis "Set Spread" and
+# "Total Sets" share their market keys with the game spread and total games,
+# and a +1.5 sets line would otherwise pass for +1.5 games.
+exclude_markets:
+  - Set Spread
+  - Total Sets
+
 # Names a book may use for a feed league, for automatic league discovery.
 # A league not listed here is looked up by its own name (NFL, NHL, MLB, NBA...).
 league_names:

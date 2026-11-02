@@ -107,7 +107,10 @@ The dashboard also has endpoints to fix matching without editing files:
 ## Adding things
 
 - **A league:** add its feed URL under `feeds:`. If the book names it differently, add it to `league_names` in `betbot/books/bodog_markets.yaml`, or set `books.OZ.leagues`.
-- **Team spellings:** add to `betbot/matching/aliases/<LEAGUE>.yaml`. A league with no file still works through fuzzy matching.
+  - New built-in feeds (like college basketball and tennis) are added to each PC's `config.yaml` by themselves on the next start. A feed you delete from `feeds:` stays deleted.
+  - Half, quarter and period lines come under their own league name in the feed (`NCAAB 1H`). The bot bets them in the plain league as `1H ATS`, `1H Over` and so on. MyBookie skips them.
+- **Tennis:** one feed, `json?atp-pro`, carries both ATP and WTA (`json?wta-pro` returns the same rows, so don't add both). At Ozoon, `ATP` and `WTA` are its tours, which cover every tournament. Game spreads, moneylines and total games are bet; set spreads, total sets and player game totals never are. Players are matched by full name, with the feed's `machac t` style checked against the opponent.
+- **Team spellings:** add to `betbot/matching/aliases/<LEAGUE>.yaml`. A league with no file still works through fuzzy matching. College basketball also uses `NCAAF.yaml`, since the schools are the same.
 - **Bet types or periods** (e.g. `1H ATS`): add them to `bettypes` / `periods` in `bodog_markets.yaml`. Unknown types are skipped and shown on the dashboard.
 - **MyBookie (`MyB`)** is enabled in `config.example.yaml`. A PC set up before it was added needs the `MyB` block copied from there into its own `config.yaml` (the key must be `MyB`, as the feed spells it).
   - NFL, NCAAF, NHL and MLB are built in; other leagues are found by name in MyBookie's menu. If one isn't, open it in capture mode: the summary shows `"leagueId": "…"` in its `leagues-lines` request. Add a name to `league_names` in `betbot/books/mybookie_markets.yaml`, or set `books.MyB.leagues: {NBA: "1167"}`.

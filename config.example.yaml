@@ -7,6 +7,8 @@ feeds:
   - https://arbhunterpro.com/json?ncaaf-pro
   - https://arbhunterpro.com/json?mlb-pro
   - https://arbhunterpro.com/json?nhl-pro
+  - https://arbhunterpro.com/json?ncaab-pro
+  - https://arbhunterpro.com/json?atp-pro     # all tennis: ATP and WTA (json?wta-pro is the same feed)
 feed_interval_s: 1.0
 feed_date_tz: UTC          # timezone of the feed's "date" field (used for live staleness)
 

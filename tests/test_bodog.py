@@ -239,3 +239,48 @@ def test_accepted_price_reads_what_the_book_took():
     from betbot.books.bodog import accepted_price
     assert accepted_price(load("oz_capture_bet.json")["status_response"]) == pytest.approx(1.91)
     assert accepted_price({"bets": {"bet": [{}]}}) is None and accepted_price(None) is None
+
+
+def test_tennis_tours_are_leagues():
+    tours = [c for c in load("oz_nav_tennis.json")["children"] if c["type"] in ("LEAGUE", "TOUR")]
+    assert BodogAdapter.pick_league("ATP", tours, []) == "/tennis/atp"
+    assert BodogAdapter.pick_league("WTA", tours, []) == "/tennis/wta"
+
+
+def tennis_row(**over):
+    # Lorenzo Sonego (sq_team) against Mattia Bellucci, as the feed writes a tennis row
+    row = dict(id="021126-1000_OZ_ATP_bellucci m_sonego l_ATS_4.5", league="ATP", pinn_team="bellucci m",
+               sq_team="Lorenzo Sonego", spread=4.5, start_date=1793631600000)
+    row.update(over)
+    events = parse_events(load("oz_event_tennis.json"), "OZ", "/tennis/atp")
+    r = parse_row(feed_row(**row))
+    m = match_row(r, events)
+    assert m.ok, m.reason
+    return m.event, load("oz_event_tennis.json")[0]["events"][0], r, m.team
+
+
+def test_tennis_game_spread_uses_match_period():
+    ev, js, row, team = tennis_row()
+    sel, why = find_selection(ev, js, row, team)
+    assert sel, why
+    assert sel.outcome_description == "Lorenzo Sonego" and sel.handicap == 4.5
+    assert "Game Spread" in sel.market_description
+
+
+def test_tennis_set_spread_is_not_a_game_spread():
+    # the book has Sonego +1.5 only as a set spread; +1.5 games must not be bet on it
+    ev, js, row, team = tennis_row(id="021126-1000_OZ_ATP_bellucci m_sonego l_ATS_1.5", spread=1.5)
+    sel, why = find_selection(ev, js, row, team)
+    assert sel is None and "1.5 not offered" in why
+
+
+def test_tennis_total_games_not_sets_or_player_totals():
+    ev, js, row, team = tennis_row(id="021126-1000_OZ_ATP_bellucci m_sonego l_Over_18.5", bettype="Over",
+                                   spread="None", total=18.5)
+    sel, why = find_selection(ev, js, row, team)
+    assert sel, why
+    assert sel.market_description == "Game Lines / Total" and sel.handicap == 18.5
+    for total in (2.5, 6.5):  # Total Sets 2.5, and Sonego's own games 6.5
+        ev, js, row, team = tennis_row(id=f"021126-1000_OZ_ATP_bellucci m_sonego l_Under_{total}", bettype="Under",
+                                       spread="None", total=total)
+        assert find_selection(ev, js, row, team)[0] is None
