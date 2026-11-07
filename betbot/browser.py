@@ -60,15 +60,29 @@ LOGIN_HINTS_JS = """
   .map(e => `${e.tagName} "${(e.innerText || e.value || '').trim().slice(0, 30)}" id=${e.id} class=${String(e.className).slice(0, 60)}`)
 """
 
+# The page gives up on a request after this long, and Python a few seconds later (a page that is
+# frozen or busy can't even give up); either way the call fails instead of waiting forever. POSTs,
+# which include placing a bet, get longer and are never retried, so a slow bet can't go in twice.
+FETCH_TIMEOUT_S = {"GET": 15.0}
+POST_TIMEOUT_S = 45.0
+EVAL_GRACE_S = 5.0      # how much longer Python waits than the page's own limit
+EVAL_TIMEOUT_S = 20.0   # page scripts that aren't requests (login state, balance...)
+
 FETCH_JS = """
-async ([method, url, body, headers]) => {
-  const opts = {method, credentials: 'include', headers: Object.assign({'Accept': 'application/json'}, headers || {})};
+async ([method, url, body, headers, timeoutMs]) => {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  const opts = {method, credentials: 'include', signal: ctl.signal,
+                headers: Object.assign({'Accept': 'application/json'}, headers || {})};
   if (body !== null && body !== undefined) {
     opts.body = JSON.stringify(body);
     opts.headers['Content-Type'] = 'application/json';
   }
-  const r = await fetch(url, opts);
-  const text = await r.text();
+  let r, text;
+  try {
+    r = await fetch(url, opts);
+    text = await r.text();
+  } finally { clearTimeout(timer); }
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch (e) { data = {_text: text.slice(0, 500)}; }
   return [r.status, data];
@@ -163,18 +177,23 @@ class BrowserSession:
         if self._pw:
             await self._pw.stop()
 
-    async def _eval(self, page: Any, js: str, arg: Any = None) -> Any:
-        """Run js in the page's main world, where the site's globals (window.OL, its fetch) live."""
-        if self.stealth:
-            return await page.evaluate(js, arg, isolated_context=False)
-        return await page.evaluate(js, arg)
+    async def _eval(self, page: Any, js: str, arg: Any = None, timeout_s: float = EVAL_TIMEOUT_S) -> Any:
+        """Run js in the page's main world, where the site's globals (window.OL, its fetch) live.
+
+        Playwright waits for a page script forever; a tab Chrome has frozen, or a request that stalls,
+        would then hold up every lookup behind it. So give up after timeout_s."""
+        call = (page.evaluate(js, arg, isolated_context=False) if self.stealth else page.evaluate(js, arg))
+        try:
+            return await asyncio.wait_for(call, timeout_s)
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"the {self.base_url} tab didn't answer within {timeout_s:g}s") from None
 
     async def evaluate(self, js: str, arg: Any = None) -> Any:
         """Run js in the background tab's main world, e.g. to read the site's CSRF token."""
         return await self._eval(self.api_page, js, arg)
 
     async def reload_api(self) -> None:
-        await self.api_page.goto(self.base_url + self.start_path, wait_until="domcontentloaded")
+        await self.api_page.goto(self.base_url + self.start_path, wait_until="domcontentloaded", timeout=30000)
 
     # ----- the site's API, from inside the page -----------------------------
     async def request(self, method: str, path: str, *, body: Any = None,
@@ -182,12 +201,20 @@ class BrowserSession:
         # Relative paths go to whichever host the page is on: the site serves its betting API
         # from the same origin as the page (e.g. services.ozoon.eu), not necessarily base_url.
         url = path
+        limit = FETCH_TIMEOUT_S.get(method.upper(), POST_TIMEOUT_S)
+        args = [method, url, body, headers or {}, int(limit * 1000)]
         try:
-            status, data = await self._eval(self.api_page, FETCH_JS, [method, url, body, headers or {}])
-        except Exception as e:  # tab reloaded mid-call, etc.
-            log.warning("in-page fetch failed (%s); reloading api tab", e)
+            status, data = await self._eval(self.api_page, FETCH_JS, args, timeout_s=limit + EVAL_GRACE_S)
+        except Exception as e:  # tab reloaded mid-call, frozen, request stalled...
+            if method.upper() != "GET":  # may have reached the site (e.g. a bet): never send it twice
+                log.warning("in-page %s %s failed (%s); reloading the background tab", method,
+                            path.split("?")[0], e)
+                await self.reload_api()
+                raise
+            log.warning("in-page GET %s failed (%s); reloading the background tab and trying once more",
+                        path.split("?")[0], e)
             await self.reload_api()
-            status, data = await self._eval(self.api_page, FETCH_JS, [method, url, body, headers or {}])
+            status, data = await self._eval(self.api_page, FETCH_JS, args, timeout_s=limit + EVAL_GRACE_S)
         return int(status), data
 
     async def auth(self) -> dict[str, Any]:

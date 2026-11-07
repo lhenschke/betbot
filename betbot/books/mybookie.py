@@ -454,7 +454,11 @@ class MyBookieAdapter(BookAdapter):
         if dry_run:
             return BetResult(BetStatus.DRY_RUN, stake, price, timings=timings, raw=payload,
                              reason=f"max stake {mx:g}" if mx is not None else "max stake unknown")
-        status, resp = await self._post(PLACE, payload)
+        try:
+            status, resp = await self._post(PLACE, payload)
+        except Exception as e:  # noqa: BLE001 - the bet may have gone in: record it as unknown, not failed
+            return BetResult(BetStatus.ERROR, stake, price, timings=timings,
+                             reason=f"no answer after placing ({e}); check My Bets")
         timings["post_ms"] = timings["final_ms"] = (time.monotonic() - t0) * 1000
         if status in (401, 419):
             raise PermissionError("session expired")

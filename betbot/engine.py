@@ -190,12 +190,18 @@ class Engine:
         if v.event is not None:
             return True
         adapter = self.adapters[v.row.book]
+        v.reason = f"looking up {v.row.league} games at {v.row.book}..."
+        await self.emit({"type": "rows"})
         try:
             events = await adapter.events(v.row.league, live_hint=v.row.is_live)
             if self._left_feed(v):
                 return False
         except LeagueNotMapped as e:
             v.state, v.reason = "league_not_mapped", str(e)
+            self.ledger.record_decision(v.row.id, v.row.book, v.row.league, v.row.arbsize, "unmatched", str(e))
+            return False
+        except Exception as e:  # noqa: BLE001 - e.g. the book didn't answer: show why, try again next update
+            v.state, v.reason = "unmatched", f"couldn't get {v.row.league} games from {v.row.book}: {e}"
             self.ledger.record_decision(v.row.id, v.row.book, v.row.league, v.row.arbsize, "unmatched", str(e))
             return False
         m = match_row(v.row, events)

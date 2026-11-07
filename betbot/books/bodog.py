@@ -433,7 +433,12 @@ class BodogAdapter(BookAdapter):
             return BetResult(BetStatus.DRY_RUN, stake, sel.decimal, reason=f"max stake {mx}",
                              timings=timings, raw=payload)
         headers = {**headers, "X-Idempotency-Key": str(uuid.uuid4())}
-        status, resp = await self.transport.request("POST", f"{SVC}/bet/betslip", body=payload, headers=headers)
+        try:
+            status, resp = await self.transport.request("POST", f"{SVC}/bet/betslip", body=payload,
+                                                        headers=headers)
+        except Exception as e:  # noqa: BLE001 - the bet may have gone in: record it as unknown, not failed
+            return BetResult(BetStatus.ERROR, stake, sel.decimal, timings=timings,
+                             reason=f"no answer after placing ({e}); check My Bets")
         timings["post_ms"] = (time.monotonic() - t0) * 1000
         if status == 401:
             raise PermissionError("session expired")
@@ -449,9 +454,13 @@ class BodogAdapter(BookAdapter):
         deadline = time.monotonic() + timeout_s
         while state == "PENDING" and key and time.monotonic() < deadline:
             await asyncio.sleep(0.8)
-            _, resp = await self.transport.request(
-                "GET", f"{SVC}/bet/betslip/{key}",
-                headers={k: v for k, v in headers.items() if k != "X-Idempotency-Key"})
+            try:
+                _, resp = await self.transport.request(
+                    "GET", f"{SVC}/bet/betslip/{key}",
+                    headers={k: v for k, v in headers.items() if k != "X-Idempotency-Key"})
+            except Exception as e:  # noqa: BLE001 - keep asking until the deadline
+                log.warning("bet status check failed (%s); asking again", e)
+                continue
             state, ref, reason, retry = interpret_result(resp)
         timings["final_ms"] = (time.monotonic() - t0) * 1000
         if state == "SUCCESS":

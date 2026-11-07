@@ -385,3 +385,18 @@ def test_slip_amount():
     from betbot.books.bodog import slip_amount
     assert slip_amount("1,056.00") == 1056.0 and slip_amount("$250") == 250 and slip_amount("") is None
     assert slip_amount("0.00") is None
+
+
+async def test_a_bet_with_no_answer_is_recorded_as_unknown_not_failed():
+    from betbot.config import BookConfig
+    cap = load("oz_capture_bet.json")
+
+    class SilentOnPlace(CaptureTransport):
+        async def request(self, method, path, *, body=None, headers=None):
+            if method == "POST" and path.endswith("/bet/betslip"):
+                raise TimeoutError("the tab didn't answer within 50s")
+            return await super().request(method, path, body=body, headers=headers)
+
+    adapter = BodogAdapter("OZ", BookConfig(base_url="https://www.ozoon.eu"), SilentOnPlace(cap), None, FakeBrowser())
+    res = await adapter.place_api(captured_selection(), 2.0, dry_run=False)
+    assert res.status.value == "error" and "check My Bets" in res.reason

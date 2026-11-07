@@ -416,3 +416,16 @@ async def test_max_mode_presses_the_slips_max_button(setup):
     await feed(eng, poller, arbsize=2, book_limit="None")
     assert calls == [(500, True, 5)]  # the most your caps allow: the 500 event cap
     assert ledger.recent_bets(1)[0]["stake"] == 312.0  # what the slip actually took
+
+
+async def test_a_book_that_doesnt_answer_shows_why(setup):
+    cfg, ledger, poller, adapter, eng = setup
+
+    async def events(league, live_hint=False):
+        raise TimeoutError("the https://x tab didn't answer within 20s")
+
+    adapter.events = events
+    await feed(eng, poller, arbsize=2)
+    v = next(iter(eng.views.values()))
+    assert v.state == "unmatched" and "couldn't get NFL games from OZ" in v.reason and "didn't answer" in v.reason
+    assert adapter.placed == []
